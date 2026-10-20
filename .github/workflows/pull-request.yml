@@ -1,0 +1,21 @@
+name: Pull request links an issue
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  issue:
+    name: Issue is linked
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Closes, Fixes, or Resolves
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s\n' "$BODY" | grep -Eqi '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+'; then
+            exit 0
+          fi
+          echo "Open a GitHub issue first, then link it from the pull request body with Closes #<number>."
+          echo "See AGENTS.md."
+          exit 1

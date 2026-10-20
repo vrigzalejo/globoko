@@ -29,4 +29,10 @@ npm run preview
 
 Imagery is Esri’s world mosaic on a smooth Earth. To load Cesium world terrain, set `VITE_CESIUM_ION_TOKEN` in `.env.local`.
 
+## Continuous integration
+
+Every pull request runs `npm ci` and `npm run build`. A push to `main` publishes the site with GitHub Pages.
+
+In the repository settings, set Pages to deploy from GitHub Actions. The site is then at https://vrigzalejo.github.io/globoko/.
+
 Positions come from [astronomy-engine](https://github.com/cosinekitty/astronomy). The globe is [Cesium](https://cesium.com/). Place search uses the [Photon](https://photon.komoot.io/) API.
