@@ -548,11 +548,6 @@ button:focus-visible, input:focus-visible {
   .search { grid-area: search; max-width: none; margin: 0; min-width: 0; }
   .search input, .tools button { height: 48px; }
   #locate { flex: 0 0 48px; width: 48px; min-width: 48px; }
-  .brand, .clock, .search, .tools button, #panel, #credit, .time, .zoom button, #search-results {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    background: rgba(8, 12, 18, 0.94);
-  }
   .clock {
     grid-area: clock;
     display: flex;
@@ -579,7 +574,7 @@ button:focus-visible, input:focus-visible {
     border-bottom: 0;
     z-index: 5;
     transform: translate3d(0, calc(100% - var(--sheet)), 0);
-    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 0.25s ease;
   }
   #panel.open { transform: translate3d(0, 0, 0); }
   #panel:not(.open) #panel-body { visibility: hidden; }
