@@ -191,7 +191,7 @@ button:focus-visible, input:focus-visible {
   display: grid;
   place-items: center;
 }
-#locate svg { width: 22px; height: 22px; display: block; }
+#locate svg { width: 24px; height: 24px; display: block; }
 .tools button, #clear-place {
   height: 58px;
   padding: 0 14px;
