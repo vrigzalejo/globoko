@@ -2,6 +2,8 @@ import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 import tzlookup from 'tz-lookup';
 import { createGlobe } from './globe.js';
+import { currentPlan } from './plan.js';
+import { readPlaces, rememberSavedPlace, removePlace, sameSpot, writePlaces } from './places.js';
 import { BODIES, computeSky, computeTracks, moonPhaseViews, riseSet } from './sky.js';
 import {
   formatAltitude,
@@ -93,7 +95,10 @@ const detailName = document.getElementById('detail-name');
 const detailSky = document.getElementById('detail-sky');
 const detailOverhead = document.getElementById('detail-overhead');
 const placeLabel = document.getElementById('place-label');
+const savePlaceButton = document.getElementById('save-place');
 const clearPlace = document.getElementById('clear-place');
+const savedList = document.getElementById('saved-places');
+const savedNote = document.getElementById('saved-note');
 const loader = document.getElementById('loader');
 const panel = document.getElementById('panel');
 const panelToggle = document.getElementById('panel-toggle');
@@ -102,6 +107,9 @@ let place = null;
 let locateWatch = null;
 let locateToken = 0;
 let locateStatus = null;
+let savedPlaces = readPlaces(localStorage);
+let savedMarkupKey = '';
+let storageError = false;
 let bodies = [];
 let selectedId = 'Sun';
 let riseKey = '';
@@ -192,16 +200,20 @@ function skyMoment(dayOffset, hour) {
   return target;
 }
 
-const TIME_MIN = -1440;
-const TIME_MAX = 2880;
 const TIME_FAR = 50 * 24 * 60;
+
+function planBounds() {
+  const plan = currentPlan();
+  return { min: -plan.pastMinutes, max: plan.futureMinutes };
+}
 
 function jumpTo(date) {
   const minutes = Math.round((date.getTime() - Date.now()) / 60000);
-  let min = TIME_MIN;
-  let max = TIME_MAX;
-  if (minutes > TIME_MAX) max = Math.min(TIME_FAR, Math.ceil(minutes / 60) * 60);
-  if (minutes < TIME_MIN) min = Math.max(-TIME_FAR, Math.floor(minutes / 60) * 60);
+  const bounds = planBounds();
+  let min = bounds.min;
+  let max = bounds.max;
+  if (minutes > bounds.max) max = Math.min(TIME_FAR, Math.ceil(minutes / 60) * 60);
+  if (minutes < bounds.min) min = Math.max(-TIME_FAR, Math.floor(minutes / 60) * 60);
   timeRange.min = String(min);
   timeRange.max = String(max);
   const clamped = Math.max(min, Math.min(max, minutes));
@@ -301,6 +313,7 @@ function renderDetail() {
       ? `As seen from ${place.name}`
       : 'Set a place to see altitude, azimuth, rise, and set.');
   clearPlace.hidden = !place;
+  renderSavedPlaces();
   renderPhases(body);
 }
 
@@ -474,6 +487,88 @@ clearPlace.addEventListener('click', () => {
   tick();
 });
 
+function renderSavedPlaces() {
+  const plan = currentPlan();
+  const here = place ? savedPlaces.find((entry) => sameSpot(entry, place)) : null;
+  const markupKey = savedPlaces.map((entry) => `${entry.id}:${entry.name}`).join('|');
+  if (markupKey !== savedMarkupKey) {
+    savedMarkupKey = markupKey;
+    savedList.replaceChildren();
+    for (const entry of savedPlaces) {
+      const item = document.createElement('li');
+      item.dataset.id = entry.id;
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'saved-open';
+      open.textContent = placeClockName(entry.name);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'saved-remove';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', `Remove ${placeClockName(entry.name)}`);
+      item.append(open, remove);
+      savedList.append(item);
+    }
+  }
+  savedList.hidden = savedPlaces.length === 0;
+  for (const item of savedList.children) {
+    const entry = savedPlaces.find((candidate) => candidate.id === item.dataset.id);
+    const open = item.querySelector('.saved-open');
+    if (place && entry && sameSpot(entry, place)) open.setAttribute('aria-current', 'true');
+    else open.removeAttribute('aria-current');
+  }
+  const full = Boolean(place) && !here && savedPlaces.length >= plan.savedPlaces;
+  savePlaceButton.hidden = !place;
+  savePlaceButton.disabled = Boolean(here) || full;
+  savePlaceButton.textContent = here ? 'Saved' : 'Save';
+  savePlaceButton.classList.toggle('is-saved', Boolean(here));
+  if (storageError) {
+    savedNote.hidden = false;
+    savedNote.textContent = 'This browser could not store the place.';
+    return;
+  }
+  savedNote.hidden = !full;
+  if (full) savedNote.textContent = `You can keep ${plan.savedPlaces} places on this device.`;
+}
+
+function storeSavedPlaces(next) {
+  if (!writePlaces(localStorage, next)) {
+    storageError = true;
+    renderSavedPlaces();
+    return false;
+  }
+  storageError = false;
+  savedPlaces = next;
+  savedMarkupKey = '';
+  return true;
+}
+
+savePlaceButton.addEventListener('click', () => {
+  if (!place) return;
+  const result = rememberSavedPlace(savedPlaces, place, currentPlan().savedPlaces);
+  if (result.places === savedPlaces) {
+    renderSavedPlaces();
+    return;
+  }
+  if (storeSavedPlaces(result.places)) renderSavedPlaces();
+});
+
+savedList.addEventListener('click', (event) => {
+  const item = event.target.closest('li');
+  if (!item) return;
+  const id = item.dataset.id;
+  if (event.target.closest('.saved-remove')) {
+    if (storeSavedPlaces(removePlace(savedPlaces, id))) renderSavedPlaces();
+    return;
+  }
+  if (!event.target.closest('.saved-open')) return;
+  const saved = savedPlaces.find((entry) => entry.id === id);
+  if (!saved) return;
+  searchInput.value = saved.name;
+  rememberPlace(saved.latitude, saved.longitude, saved.name);
+  usePlace(saved.latitude, saved.longitude, saved.name);
+});
+
 document.getElementById('zoom-in').addEventListener('click', () => globe.zoomIn());
 document.getElementById('zoom-out').addEventListener('click', () => globe.zoomOut());
 document.getElementById('zoom-original').addEventListener('click', () => globe.zoomOriginal());
@@ -481,6 +576,9 @@ document.getElementById('zoom-original').addEventListener('click', () => globe.z
 const timeNow = document.getElementById('time-now');
 const timeRange = document.getElementById('time-range');
 const timeLabel = document.getElementById('time-label');
+const openingBounds = planBounds();
+timeRange.min = String(openingBounds.min);
+timeRange.max = String(openingBounds.max);
 
 timeNow.addEventListener('click', () => jumpTo(new Date()));
 timeRange.addEventListener('input', () => applyMinutes(Number(timeRange.value), false));

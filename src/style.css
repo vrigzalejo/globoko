@@ -192,7 +192,7 @@ button:focus-visible, input:focus-visible {
   place-items: center;
 }
 #locate svg { width: 24px; height: 24px; display: block; }
-.tools button, #clear-place {
+.tools button, #save-place, #clear-place, .saved-open, .saved-remove {
   height: 58px;
   padding: 0 14px;
   border-radius: 16px;
@@ -200,7 +200,16 @@ button:focus-visible, input:focus-visible {
   background: var(--glass);
   cursor: pointer;
 }
-.tools button:hover, #clear-place:hover { border-color: rgba(255, 176, 32, 0.55); }
+.tools button:hover, #save-place:hover, #clear-place:hover, .saved-open:hover, .saved-remove:hover {
+  border-color: rgba(255, 176, 32, 0.55);
+}
+#save-place:disabled { cursor: default; }
+#save-place:disabled:hover { border-color: var(--line); }
+#save-place.is-saved,
+#save-place.is-saved:hover {
+  color: var(--gold);
+  border-color: rgba(255, 176, 32, 0.45);
+}
 .tools button[aria-pressed="true"] {
   border-color: rgba(255, 176, 32, 0.85);
   color: var(--gold);
@@ -405,6 +414,15 @@ button:focus-visible, input:focus-visible {
   color: var(--gold);
 }
 
+.place-block {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: 8px;
+  padding-top: 8px;
+  background: #0b1016;
+  box-shadow: 0 -8px 12px #0b1016;
+}
 .place-line {
   display: flex;
   align-items: center;
@@ -414,7 +432,44 @@ button:focus-visible, input:focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
-#clear-place { height: 32px; padding: 0 10px; border-radius: 10px; }
+.place-actions { display: flex; gap: 6px; flex: none; }
+#save-place, #clear-place { height: 32px; padding: 0 10px; border-radius: 10px; }
+
+#saved-places {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0 0 2px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+#saved-places li { display: flex; gap: 4px; flex: none; }
+.saved-open, .saved-remove { height: 32px; border-radius: 10px; }
+.saved-open {
+  max-width: 180px;
+  padding: 0 10px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-open[aria-current="true"] {
+  border-color: rgba(255, 176, 32, 0.85);
+  color: var(--gold);
+}
+.saved-remove {
+  flex: none;
+  width: 32px;
+  padding: 0;
+  color: var(--muted);
+}
+.saved-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 
 .time {
   position: absolute;

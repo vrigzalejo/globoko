@@ -74,10 +74,17 @@
             <ul id="phase-list"></ul>
           </div>
           <dl id="facts"></dl>
-          <p class="place-line">
-            <span id="place-label">Set a place to see altitude and azimuth.</span>
-            <button id="clear-place" type="button" hidden>Clear</button>
-          </p>
+          <div class="place-block">
+            <ul id="saved-places" aria-label="Saved places" hidden></ul>
+            <p id="saved-note" class="saved-note" hidden></p>
+            <p class="place-line">
+              <span id="place-label">Set a place to see altitude and azimuth.</span>
+              <span class="place-actions">
+                <button id="save-place" type="button" hidden>Save</button>
+                <button id="clear-place" type="button" hidden>Clear</button>
+              </span>
+            </p>
+          </div>
         </section>
       </div>
     </aside>
