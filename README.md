@@ -2,6 +2,8 @@
 
 A live 3D Earth that shows where the Sun, Moon, and planets are straight overhead right now.
 
+Source: https://github.com/vrigzalejo/globoko
+
 Each pin is the point on the ground where that body is at zenith. Day and night on the globe follow the Sun. Pick a place to see how high a body is, which way to look, and when it rises and sets.
 
 ## Run it

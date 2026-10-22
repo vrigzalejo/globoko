@@ -26,7 +26,7 @@ html, body {
 
 button, input { font: inherit; color: inherit; }
 button { touch-action: manipulation; }
-button:focus-visible, input:focus-visible {
+button:focus-visible, input:focus-visible, a:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
@@ -72,7 +72,7 @@ button:focus-visible, input:focus-visible {
 
 .topbar > * { pointer-events: auto; }
 
-.brand, .clock, .search, .tools button, #panel, .hint, #credit {
+.brand, .clock, .search, .tools button, .tools a, #panel, .hint, #credit {
   background: var(--glass);
   border: 1px solid var(--line);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
@@ -182,17 +182,19 @@ button:focus-visible, input:focus-visible {
 #search-results small { display: block; color: var(--muted); font-size: 12px; }
 
 .tools { display: flex; gap: 8px; flex: none; }
-.tools button { white-space: nowrap; }
-#locate {
+.tools button, .tools a { white-space: nowrap; }
+#locate, #github {
   flex: 0 0 58px;
   width: 58px;
   min-width: 58px;
   padding: 0;
   display: grid;
   place-items: center;
+  color: inherit;
+  text-decoration: none;
 }
-#locate svg { width: 24px; height: 24px; display: block; }
-.tools button, #save-place, #clear-place, .saved-open, .saved-remove {
+#locate svg, #github svg { width: 24px; height: 24px; display: block; }
+.tools button, .tools a, #save-place, #clear-place, .saved-open, .saved-remove {
   height: 58px;
   padding: 0 14px;
   border-radius: 16px;
@@ -200,7 +202,7 @@ button:focus-visible, input:focus-visible {
   background: var(--glass);
   cursor: pointer;
 }
-.tools button:hover, #save-place:hover, #clear-place:hover, .saved-open:hover, .saved-remove:hover {
+.tools button:hover, .tools a:hover, #save-place:hover, #clear-place:hover, .saved-open:hover, .saved-remove:hover {
   border-color: rgba(255, 176, 32, 0.55);
 }
 #save-place:disabled { cursor: default; }
@@ -598,8 +600,8 @@ button:focus-visible, input:focus-visible {
   .brand { grid-area: brand; height: 48px; width: fit-content; max-width: 100%; justify-self: start; }
   .tools { grid-area: tools; }
   .search { grid-area: search; max-width: none; margin: 0; min-width: 0; }
-  .search input, .tools button { height: 48px; }
-  #locate { flex: 0 0 48px; width: 48px; min-width: 48px; }
+  .search input, .tools button, .tools a { height: 48px; }
+  #locate, #github { flex: 0 0 48px; width: 48px; min-width: 48px; }
   .clock {
     grid-area: clock;
     display: flex;
