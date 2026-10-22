@@ -107,10 +107,11 @@ function onPhone() {
 }
 
 export function createGlobe(container, creditContainer) {
+  const phone = onPhone();
   const imageryProvider = new UrlTemplateImageryProvider({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     tilingScheme: new WebMercatorTilingScheme(),
-    maximumLevel: 19,
+    maximumLevel: phone ? 17 : 19,
     credit: new Credit(
       'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
       true,
@@ -135,8 +136,11 @@ export function createGlobe(container, creditContainer) {
     baseLayer: imagery,
     shouldAnimate: false,
     creditContainer,
-    useBrowserRecommendedResolution: false,
-    msaaSamples: 4,
+    useBrowserRecommendedResolution: phone,
+    msaaSamples: phone ? 1 : 4,
+    contextOptions: phone
+      ? { webgl: { antialias: false, powerPreference: 'high-performance' } }
+      : undefined,
   });
 
   const { scene } = viewer;
@@ -159,8 +163,21 @@ export function createGlobe(container, creditContainer) {
   function applyPhoneQuality() {
     const mobile = onPhone();
     viewer.useBrowserRecommendedResolution = mobile;
-    scene.globe.maximumScreenSpaceError = mobile ? 2.8 : 1.6;
+    scene.globe.maximumScreenSpaceError = mobile ? 4 : 1.6;
     scene.globe.loadingDescendantLimit = mobile ? 1 : 20;
+    scene.globe.tileCacheSize = mobile ? 40 : 100;
+    scene.globe.preloadAncestors = !mobile;
+    scene.globe.preloadSiblings = !mobile;
+    scene.globe.showGroundAtmosphere = !mobile;
+    scene.globe.dynamicAtmosphereLighting = !mobile;
+    scene.globe.dynamicAtmosphereLightingFromSun = !mobile;
+    scene.fog.enabled = !mobile;
+    scene.sun.show = !mobile;
+    scene.pickTranslucentDepth = !mobile;
+    imagery.brightness = mobile ? 1 : 1.08;
+    imagery.contrast = mobile ? 1 : 1.06;
+    imagery.saturation = mobile ? 1 : 1.18;
+    if (scene.postProcessStages.fxaa) scene.postProcessStages.fxaa.enabled = !mobile;
   }
 
   applyPhoneQuality();
@@ -210,8 +227,11 @@ export function createGlobe(container, creditContainer) {
       label: labelOptions(meta.label, offsetX, offsetY),
       polyline: {
         positions: new CallbackProperty(() => stem, false),
-        width: new CallbackProperty(() => (selected.id === meta.id ? 14 : 9), false),
-        material: new PolylineGlowMaterialProperty({
+        width: new CallbackProperty(() => {
+          if (phone) return selected.id === meta.id ? 4 : 2;
+          return selected.id === meta.id ? 14 : 9;
+        }, false),
+        material: phone ? color : new PolylineGlowMaterialProperty({
           glowPower: 0.16,
           color,
         }),
@@ -229,13 +249,13 @@ export function createGlobe(container, creditContainer) {
         color,
         outlineColor: Color.WHITE,
         outlineWidth: 2,
-        heightReference: HeightReference.CLAMP_TO_GROUND,
+        heightReference: phone ? HeightReference.NONE : HeightReference.CLAMP_TO_GROUND,
       },
       ellipse: {
         semiMajorAxis: new CallbackProperty(() => (selected.id === meta.id ? 220000 : 140000), false),
         semiMinorAxis: new CallbackProperty(() => (selected.id === meta.id ? 220000 : 140000), false),
         material: color.withAlpha(0.32),
-        classificationType: ClassificationType.TERRAIN,
+        ...(phone ? { height: 0 } : { classificationType: ClassificationType.TERRAIN }),
       },
     });
 
@@ -264,8 +284,8 @@ export function createGlobe(container, creditContainer) {
         ellipsoid: {
           radii: new Cartesian3(1737400, 1737400, 1737400),
           material: new ImageMaterialProperty({ image: '/textures/moon.jpg' }),
-          slicePartitions: 64,
-          stackPartitions: 48,
+          slicePartitions: phone ? 24 : 64,
+          stackPartitions: phone ? 16 : 48,
         },
         billboard: {
           image: makeOrb(meta.color),
