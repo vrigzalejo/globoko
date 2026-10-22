@@ -4,7 +4,7 @@ import tzlookup from 'tz-lookup';
 import { createGlobe } from './globe.js';
 import { currentPlan } from './plan.js';
 import { readPlaces, rememberSavedPlace, removePlace, sameSpot, writePlaces } from './places.js';
-import { BODIES, computeSky, computeTracks, moonPhaseViews, riseSet } from './sky.js';
+import { BODIES, computeSky, computeTracks, moonPhaseViews, riseSet, solarOrbits } from './sky.js';
 import {
   formatAltitude,
   formatAltitudeSentence,
@@ -108,7 +108,7 @@ let locateWatch = null;
 let locateToken = 0;
 let locateStatus = null;
 let savedPlaces = readPlaces(localStorage);
-let savedMarkupKey = '';
+let savedMarkupKey = null;
 let storageError = false;
 let bodies = [];
 let selectedId = 'Sun';
@@ -392,7 +392,7 @@ function dismissLocate() {
 
 function locateMe() {
   const button = document.getElementById('locate');
-  if (!navigator.geolocation) {
+  if (!window.isSecureContext || !navigator.geolocation) {
     showLocateStatus(locateMessage());
     return;
   }
@@ -400,26 +400,45 @@ function locateMe() {
   const token = locateToken;
   showLocateStatus('Finding your location…');
   button.setAttribute('aria-busy', 'true');
-  locateWatch = navigator.geolocation.watchPosition(
-    (position) => {
-      if (token !== locateToken) return;
-      stopLocate();
-      button.removeAttribute('aria-busy');
-      locateStatus = null;
-      const { latitude, longitude } = position.coords;
-      hideResults();
-      searchInput.value = 'Your location';
-      rememberPlace(latitude, longitude, 'Your location');
-      usePlace(latitude, longitude, 'your location');
-    },
-    (error) => {
-      if (token !== locateToken) return;
-      stopLocate();
-      button.removeAttribute('aria-busy');
-      showLocateStatus(locateMessage(error));
-    },
-    { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 },
-  );
+  let settled = false;
+
+  const succeed = (position) => {
+    if (settled || token !== locateToken) return;
+    settled = true;
+    stopLocate();
+    button.removeAttribute('aria-busy');
+    locateStatus = null;
+    const { latitude, longitude } = position.coords;
+    hideResults();
+    searchInput.value = 'Your location';
+    rememberPlace(latitude, longitude, 'Your location');
+    usePlace(latitude, longitude, 'your location');
+  };
+
+  const fail = (error) => {
+    if (settled || token !== locateToken) return;
+    settled = true;
+    stopLocate();
+    button.removeAttribute('aria-busy');
+    showLocateStatus(locateMessage(error));
+  };
+
+  navigator.geolocation.getCurrentPosition(succeed, (error) => {
+    if (settled || token !== locateToken) return;
+    if (error?.code === 1) {
+      fail(error);
+      return;
+    }
+    locateWatch = navigator.geolocation.watchPosition(succeed, fail, {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0,
+    });
+  }, {
+    enableHighAccuracy: false,
+    timeout: 20000,
+    maximumAge: 300000,
+  });
 }
 
 function renderList() {
@@ -445,13 +464,24 @@ function refreshTracks() {
   globe.setTracks(computeTracks(skyDate()));
 }
 
+let orbitsAt = -Infinity;
+
+function refreshOrbits(date) {
+  if (globe.moving()) return;
+  const time = date.getTime();
+  if (Math.abs(time - orbitsAt) < 15_000) return;
+  orbitsAt = time;
+  const samples = window.matchMedia('(max-width: 959px)').matches ? 48 : 96;
+  globe.setOrbits(solarOrbits(date, samples));
+}
+
 pathsButton.addEventListener('click', () => {
   pathsOn = !pathsOn;
   pathsButton.setAttribute('aria-pressed', String(pathsOn));
   globe.setPathsVisible(pathsOn);
   lede.textContent = pathsOn
     ? 'Lines trace the next 24 hours. Arrows on the selected body show which way it goes.'
-    : 'Pins mark where each body is straight overhead.';
+    : 'Pins mark where each body is straight overhead. Zoom out to see the solar system.';
   if (pathsOn) {
     tracksAt = 0;
     refreshTracks();
@@ -462,6 +492,7 @@ function tick() {
   const date = skyDate();
   const sky = computeSky(date, place);
   bodies = globe.update(sky.bodies);
+  refreshOrbits(date);
   if (pathsOn) refreshTracks();
   renderClocks(date);
   renderList();
@@ -480,6 +511,10 @@ function usePlace(latitude, longitude, name) {
 
 clearPlace.addEventListener('click', () => {
   dismissLocate();
+  if (place) {
+    const saved = savedPlaces.find((entry) => sameSpot(entry, place));
+    if (saved) storeSavedPlaces(removePlace(savedPlaces, saved.id));
+  }
   place = null;
   globe.clearObserver();
   riseKey = '';
@@ -539,7 +574,7 @@ function storeSavedPlaces(next) {
   }
   storageError = false;
   savedPlaces = next;
-  savedMarkupKey = '';
+  savedMarkupKey = null;
   return true;
 }
 

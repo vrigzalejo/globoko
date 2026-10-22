@@ -5,6 +5,7 @@ import {
   Equator,
   EquatorFromVector,
   GeoVector,
+  HelioVector,
   Horizon,
   Illumination,
   MoonPhase,
@@ -20,6 +21,13 @@ import {
 export const AU_METERS = 149597870700;
 
 /**
+ * One astronomical unit on the globe, in meters.
+ * The Sun sits about here, and the outer planets land tens of times farther,
+ * which is near enough that a zoom out can frame them.
+ */
+export const AU_DISPLAY_M = 8_000_000_000;
+
+/**
  * Bodies drawn on the globe, in the order they appear in the sky list.
  * Colors are used for pins, stems, and list swatches.
  */
@@ -33,7 +41,22 @@ export const BODIES = [
   { id: 'Saturn', label: 'Saturn', color: '#ecd59a' },
   { id: 'Uranus', label: 'Uranus', color: '#7fd4cb' },
   { id: 'Neptune', label: 'Neptune', color: '#6c9dff' },
+  { id: 'Pluto', label: 'Pluto', color: '#d7b49a' },
 ];
+
+const ORBIT_DAYS = {
+  Mercury: 87.969,
+  Venus: 224.701,
+  Earth: 365.256,
+  Mars: 686.98,
+  Jupiter: 4332.59,
+  Saturn: 10759.22,
+  Uranus: 30688.5,
+  Neptune: 60182,
+  Pluto: 90560,
+};
+
+const EARTH_ORBIT_COLOR = '#8eb4d4';
 
 const MOON_RADIUS_M = 1737400;
 
@@ -127,6 +150,62 @@ function earthFixedPosition(body, date) {
   };
 }
 
+function eqjAuToDisplay(x, y, z, date) {
+  const eqd = RotateVector(Rotation_EQJ_EQD(date), { x, y, z });
+  const gast = SiderealTime(date) * 15 * (Math.PI / 180);
+  const cos = Math.cos(gast);
+  const sin = Math.sin(gast);
+  return {
+    x: (eqd.x * cos + eqd.y * sin) * AU_DISPLAY_M,
+    y: (-eqd.x * sin + eqd.y * cos) * AU_DISPLAY_M,
+    z: eqd.z * AU_DISPLAY_M,
+  };
+}
+
+const ECLIPTIC_NORTH_EQJ = { x: 0, y: -0.397776, z: 0.917482 };
+
+/** Unit vector, in Earth-fixed coordinates, toward the north ecliptic pole. */
+export function eclipticNorth(date) {
+  const turned = eqjAuToDisplay(
+    ECLIPTIC_NORTH_EQJ.x,
+    ECLIPTIC_NORTH_EQJ.y,
+    ECLIPTIC_NORTH_EQJ.z,
+    date,
+  );
+  const span = Math.hypot(turned.x, turned.y, turned.z) || 1;
+  return { x: turned.x / span, y: turned.y / span, z: turned.z / span };
+}
+
+function systemPlace(body, earthHelio, date) {
+  if (body === Body.Moon) return null;
+  const helio = body === Body.Sun ? { x: 0, y: 0, z: 0 } : HelioVector(body, date);
+  return eqjAuToDisplay(helio.x - earthHelio.x, helio.y - earthHelio.y, helio.z - earthHelio.z, date);
+}
+
+/**
+ * Orbit rings in the same display frame as the planet markers.
+ * Earth stays at the origin, so each ring is the planet's path around the Sun
+ * as it stands right now.
+ */
+export function solarOrbits(date, count = 96) {
+  const earth = HelioVector(Body.Earth, date);
+  const when = new Date(date.getTime());
+  return Object.entries(ORBIT_DAYS).map(([id, days]) => {
+    const meta = BODIES.find((body) => body.id === id);
+    const positions = [];
+    const step = days * 86400000 / count;
+    for (let i = 0; i <= count; i += 1) {
+      when.setTime(date.getTime() + i * step);
+      const helio = HelioVector(Body[id], when);
+      const point = eqjAuToDisplay(helio.x - earth.x, helio.y - earth.y, helio.z - earth.z, date);
+      const span = point.x * point.x + point.y * point.y + point.z * point.z;
+      if (span < 1e12) continue;
+      positions.push(point);
+    }
+    return { id, color: meta?.color ?? EARTH_ORBIT_COLOR, positions };
+  });
+}
+
 function optional(fn) {
   try {
     return fn();
@@ -143,6 +222,7 @@ export function computeSky(date, place) {
   const observer = place
     ? new Observer(place.latitude, place.longitude, place.height || 0)
     : null;
+  const earthHelio = HelioVector(Body.Earth, date);
 
   const bodies = BODIES.map((meta) => {
     const body = Body[meta.id];
@@ -165,6 +245,7 @@ export function computeSky(date, place) {
       x: fixed.x,
       y: fixed.y,
       z: fixed.z,
+      system: systemPlace(body, earthHelio, date),
       raHours: fixed.raHours,
       decDeg: fixed.decDeg,
       distanceAu: fixed.distanceAu,
