@@ -183,6 +183,15 @@ button:focus-visible, input:focus-visible {
 
 .tools { display: flex; gap: 8px; flex: none; }
 .tools button { white-space: nowrap; }
+#locate {
+  flex: 0 0 58px;
+  width: 58px;
+  min-width: 58px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+#locate svg { width: 24px; height: 24px; display: block; }
 .tools button, #save-place, #clear-place, .saved-open, .saved-remove {
   height: 58px;
   padding: 0 14px;
@@ -593,6 +602,7 @@ button:focus-visible, input:focus-visible {
   .tools { grid-area: tools; }
   .search { grid-area: search; max-width: none; margin: 0; min-width: 0; }
   .search input, .tools button { height: 48px; }
+  #locate { flex: 0 0 48px; width: 48px; min-width: 48px; }
   .clock {
     grid-area: clock;
     display: flex;
@@ -618,10 +628,10 @@ button:focus-visible, input:focus-visible {
     border-radius: 18px 18px 0 0;
     border-bottom: 0;
     z-index: 5;
-    transform: translateY(calc(100% - var(--sheet)));
+    transform: translate3d(0, calc(100% - var(--sheet)), 0);
     transition: transform 0.25s ease;
   }
-  #panel.open { transform: none; }
+  #panel.open { transform: translate3d(0, 0, 0); }
   #panel:not(.open) #panel-body { visibility: hidden; }
   #panel-toggle { display: flex; height: var(--sheet); }
   #panel:not(.open) .chevron { transform: rotate(-135deg); }

@@ -104,6 +104,9 @@ const panel = document.getElementById('panel');
 const panelToggle = document.getElementById('panel-toggle');
 
 let place = null;
+let locateWatch = null;
+let locateToken = 0;
+let locateStatus = null;
 let savedPlaces = readPlaces(localStorage);
 let savedMarkupKey = '';
 let storageError = false;
@@ -157,11 +160,16 @@ function renderClocks(date) {
   } else {
     timeLabel.textContent = 'Now';
   }
-  const zone = place?.timeZone;
-  const now = new Date();
-  const showPlace = Boolean(zone) && !zonesMatch(zone, now);
-  clockPlace.hidden = !showPlace;
-  if (showPlace) clockPlace.textContent = formatPlaceClock(now, zone, placeClockName(place.name));
+  if (locateStatus) {
+    clockPlace.hidden = false;
+    clockPlace.textContent = locateStatus;
+  } else {
+    const zone = place?.timeZone;
+    const now = new Date();
+    const showPlace = Boolean(zone) && !zonesMatch(zone, now);
+    clockPlace.hidden = !showPlace;
+    if (showPlace) clockPlace.textContent = formatPlaceClock(now, zone, placeClockName(place.name));
+  }
   fitPanel();
 }
 
@@ -300,9 +308,10 @@ function renderDetail() {
   setFact('set', place ? formatWhen(riseInfo.set) : null);
   setFact('rings', body.ringTilt == null ? null : `${Math.abs(body.ringTilt).toFixed(1)}°`);
 
-  placeLabel.textContent = place
-    ? `As seen from ${place.name}`
-    : 'Set a place to see altitude, azimuth, rise, and set.';
+  placeLabel.textContent = locateStatus
+    ?? (place
+      ? `As seen from ${place.name}`
+      : 'Set a place to see altitude, azimuth, rise, and set.');
   clearPlace.hidden = !place;
   renderSavedPlaces();
   renderPhases(body);
@@ -352,20 +361,64 @@ function renderPhases(body) {
   }
 }
 
+function locateMessage(error) {
+  if (error?.code === 1) return 'Location was blocked. Search for a place instead.';
+  if (error?.code === 3) return 'Location timed out. Try again.';
+  if (error) return 'Location is unavailable. Search for a place instead.';
+  return 'This browser cannot share your location.';
+}
+
+function showLocateStatus(message) {
+  locateStatus = message;
+  placeLabel.textContent = message;
+  clockPlace.hidden = false;
+  clockPlace.textContent = message;
+  fitPanel();
+}
+
+function stopLocate() {
+  locateToken += 1;
+  if (locateWatch != null) {
+    navigator.geolocation.clearWatch(locateWatch);
+    locateWatch = null;
+  }
+}
+
+function dismissLocate() {
+  stopLocate();
+  document.getElementById('locate').removeAttribute('aria-busy');
+  locateStatus = null;
+}
+
 function locateMe() {
+  const button = document.getElementById('locate');
   if (!navigator.geolocation) {
-    placeLabel.textContent = 'This browser cannot share your location.';
+    showLocateStatus(locateMessage());
     return;
   }
-  placeLabel.textContent = 'Finding your location…';
-  navigator.geolocation.getCurrentPosition(
+  stopLocate();
+  const token = locateToken;
+  showLocateStatus('Finding your location…');
+  button.setAttribute('aria-busy', 'true');
+  locateWatch = navigator.geolocation.watchPosition(
     (position) => {
-      usePlace(position.coords.latitude, position.coords.longitude, 'your location');
+      if (token !== locateToken) return;
+      stopLocate();
+      button.removeAttribute('aria-busy');
+      locateStatus = null;
+      const { latitude, longitude } = position.coords;
+      hideResults();
+      searchInput.value = 'Your location';
+      rememberPlace(latitude, longitude, 'Your location');
+      usePlace(latitude, longitude, 'your location');
     },
-    () => {
-      placeLabel.textContent = 'Location was blocked. Search for a place instead.';
+    (error) => {
+      if (token !== locateToken) return;
+      stopLocate();
+      button.removeAttribute('aria-busy');
+      showLocateStatus(locateMessage(error));
     },
-    { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 },
   );
 }
 
@@ -426,6 +479,7 @@ function usePlace(latitude, longitude, name) {
 }
 
 clearPlace.addEventListener('click', () => {
+  dismissLocate();
   place = null;
   globe.clearObserver();
   riseKey = '';
@@ -632,6 +686,7 @@ async function searchPlaces(query, pickFirst = false) {
       button.type = 'button';
       button.innerHTML = `${name}${detail ? `<small>${detail}</small>` : ''}`;
       button.addEventListener('click', () => {
+        dismissLocate();
         const label = detail ? `${name}, ${detail}` : name;
         searchInput.value = label;
         rememberPlace(latitude, longitude, label);
