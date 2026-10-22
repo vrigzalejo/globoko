@@ -415,13 +415,9 @@ button:focus-visible, input:focus-visible {
 }
 
 .place-block {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  margin-top: 8px;
+  margin-top: 10px;
   padding-top: 8px;
-  background: #0b1016;
-  box-shadow: 0 -8px 12px #0b1016;
+  border-top: 1px solid var(--line);
 }
 .place-line {
   display: flex;
@@ -444,6 +440,7 @@ button:focus-visible, input:focus-visible {
   overflow-x: auto;
   scrollbar-width: thin;
 }
+#saved-places[hidden] { display: none; }
 #saved-places li { display: flex; gap: 4px; flex: none; }
 .saved-open, .saved-remove { height: 32px; border-radius: 10px; }
 .saved-open {
