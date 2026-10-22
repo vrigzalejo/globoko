@@ -40,7 +40,12 @@
       </form>
       <div class="tools">
         <button id="paths" type="button" aria-pressed="false" title="Show the next 24 hours of each overhead point, with arrows in the direction of travel">Paths</button>
-        <button id="locate" type="button">My location</button>
+        <button id="locate" type="button" aria-label="My location" title="My location">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <path d="M12 2.5v3.2M12 18.3v3.2M2.5 12h3.2M18.3 12h3.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
       </div>
     </header>
 

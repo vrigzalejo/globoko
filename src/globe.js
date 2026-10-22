@@ -100,6 +100,12 @@ function labelOptions(text, offsetX = 0, offsetY = -16) {
   };
 }
 
+const phoneMedia = window.matchMedia('(max-width: 959px)');
+
+function onPhone() {
+  return phoneMedia.matches;
+}
+
 export function createGlobe(container, creditContainer) {
   const imageryProvider = new UrlTemplateImageryProvider({
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -149,6 +155,16 @@ export function createGlobe(container, creditContainer) {
   scene.screenSpaceCameraController.minimumZoomDistance = 40;
   scene.screenSpaceCameraController.maximumZoomDistance = 40_000_000_000;
   scene.highDynamicRange = false;
+
+  function applyPhoneQuality() {
+    const mobile = onPhone();
+    viewer.useBrowserRecommendedResolution = mobile;
+    scene.globe.maximumScreenSpaceError = mobile ? 2.8 : 1.6;
+    scene.globe.loadingDescendantLimit = mobile ? 1 : 20;
+  }
+
+  applyPhoneQuality();
+  phoneMedia.addEventListener('change', applyPhoneQuality);
 
   const token = import.meta.env.VITE_CESIUM_ION_TOKEN;
   if (token) {
@@ -494,6 +510,7 @@ export function createGlobe(container, creditContainer) {
       framed = true;
       lookHome(true);
     }
+    scene.requestRender();
     return located;
   }
 
@@ -514,6 +531,7 @@ export function createGlobe(container, creditContainer) {
     };
     if (instant) {
       viewer.camera.setView({ destination, orientation });
+      scene.requestRender();
       return;
     }
     viewer.camera.flyTo({ destination, orientation, duration: 1.6 });
@@ -536,18 +554,23 @@ export function createGlobe(container, creditContainer) {
     const started = performance.now();
     const duration = 1100;
     const pitch = CesiumMath.toRadians(-89.9);
+    const destination = new Cartesian3();
     scene.screenSpaceCameraController.enableInputs = false;
 
     const placeCamera = (t) => {
       const eased = t * t * (3 - 2 * t);
+      Cartesian3.fromDegrees(
+        startLon + deltaLon * eased,
+        startLat + deltaLat * eased,
+        height,
+        Ellipsoid.WGS84,
+        destination,
+      );
       camera.setView({
-        destination: Cartesian3.fromDegrees(
-          startLon + deltaLon * eased,
-          startLat + deltaLat * eased,
-          height,
-        ),
+        destination,
         orientation: { heading, pitch, roll: 0 },
       });
+      scene.requestRender();
     };
 
     const frame = (now) => {
@@ -581,20 +604,25 @@ export function createGlobe(container, creditContainer) {
     const flight = ++centerFlight;
     const started = performance.now();
     const duration = 450;
+    const destination = new Cartesian3();
     scene.screenSpaceCameraController.enableInputs = false;
 
     const frame = (now) => {
       if (flight !== centerFlight) return;
       const t = Math.min(1, (now - started) / duration);
       const eased = t * t * (3 - 2 * t);
+      Cartesian3.fromDegrees(
+        longitude,
+        latitude,
+        startHeight + (endHeight - startHeight) * eased,
+        Ellipsoid.WGS84,
+        destination,
+      );
       camera.setView({
-        destination: Cartesian3.fromDegrees(
-          longitude,
-          latitude,
-          startHeight + (endHeight - startHeight) * eased,
-        ),
+        destination,
         orientation: { heading, pitch, roll: 0 },
       });
+      scene.requestRender();
       if (t < 1) requestAnimationFrame(frame);
       else scene.screenSpaceCameraController.enableInputs = true;
     };
