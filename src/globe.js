@@ -8,7 +8,6 @@ import {
   Color,
   ColorMaterialProperty,
   Credit,
-  DistanceDisplayCondition,
   Ellipsoid,
   HeightReference,
   HorizontalOrigin,
@@ -19,6 +18,7 @@ import {
   LabelStyle,
   Math as CesiumMath,
   NearFarScalar,
+  PolylineDashMaterialProperty,
   PolylineGlowMaterialProperty,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
@@ -512,7 +512,6 @@ export function createGlobe(container, creditContainer) {
   }
 
   const earthTint = new Color(1, 1, 1, 0);
-  let earthDiscScale = 0.1;
 
   function syncEarthDisc() {
     const pixels = earthScreenPixels();
@@ -523,22 +522,9 @@ export function createGlobe(container, creditContainer) {
     if (distance >= system) held = 9 * Math.max(0.55, system / distance);
     else if (distance > pair) held = 36 + (9 - 36) * smoothstep(pair, system, distance);
     earthTint.alpha = CesiumMath.clamp((held + 8 - pixels) / 12, 0, 1);
-    const cover = CesiumMath.clamp((held + 4 - pixels) / 12, 0, 1);
-    earthDiscScale = (pixels + (held - pixels) * cover) / 96;
-  }
-
-  function moonBillboardScale() {
-    const distance = cameraDistance();
-    const pair = pairDistance();
-    const system = frameDistance(0);
-    if (distance <= 30_000_000) return 0.4;
-    if (distance <= 90_000_000) return 0.4 + (0.1 - 0.4) * smoothstep(30_000_000, 90_000_000, distance);
-    if (distance <= pair) return 0.1;
-    return 0.1 + (PLANET_SCALE.Moon - 0.1) * smoothstep(pair, system, distance);
   }
 
   const nameOffset = new Map();
-  const moonPixel = new Cartesian2(0, 0);
   const nameWidth = {
     Sun: 28,
     Moon: 40,
@@ -673,16 +659,6 @@ export function createGlobe(container, creditContainer) {
           slicePartitions: 64,
           stackPartitions: 48,
         },
-        billboard: {
-          image: PLANET_IMAGE.Moon,
-          scale: new CallbackProperty(moonBillboardScale, false),
-          scaleByDistance: BODY_DISTANCE_SCALE,
-          pixelOffset: new CallbackProperty(() => moonPixel, false),
-          verticalOrigin: VerticalOrigin.CENTER,
-          horizontalOrigin: HorizontalOrigin.CENTER,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          distanceDisplayCondition: new DistanceDisplayCondition(8_000_000, SYSTEM_LIMIT_M),
-        },
         label: systemLabel('Moon', 'Moon', showEarthMoonLabel),
       });
     }
@@ -694,12 +670,13 @@ export function createGlobe(container, creditContainer) {
       polyline: {
         positions: [],
         width: new CallbackProperty(() => (selected.id === meta.id ? 3 : 1.5), false),
-        material: new ColorMaterialProperty(
-          new CallbackProperty(
-            () => color.withAlpha(selected.id === meta.id ? 0.95 : 0.45),
+        material: new PolylineDashMaterialProperty({
+          color: new CallbackProperty(
+            () => color.withAlpha(selected.id === meta.id ? 0.95 : 0.55),
             false,
           ),
-        ),
+          dashLength: 24,
+        }),
         arcType: ArcType.GEODESIC,
       },
     });
@@ -750,6 +727,108 @@ export function createGlobe(container, creditContainer) {
       return arrow;
     });
 
+    const skyPositions = [];
+    const skyHidden = [new Cartesian3(), new Cartesian3(1, 0, 0)];
+    const skyArrows = meta.id === 'Moon' ? [] : ARROW_HOURS.map((hour) => ({
+      hour,
+      from: new Cartesian3(),
+      to: new Cartesian3(),
+      rotation: 0,
+      ready: false,
+      offset: new Cartesian2(22, 0),
+    }));
+    const skyPathOn = () => (
+      pathsVisible
+      && systemFade() > 0.2
+      && skyPositions.length > 2
+      && pathScreenRadius(skyPositions) > 36
+    );
+    const skyHoursOn = () => skyPathOn() && selected.id === meta.id && pathScreenRadius(skyPositions) > 72;
+    if (meta.id !== 'Moon') {
+      viewer.entities.add({
+        id: `sky-path-${meta.id}`,
+        polyline: {
+          positions: new CallbackProperty(
+            () => (skyPositions.length > 2 ? skyPositions : skyHidden),
+            false,
+          ),
+          width: new CallbackProperty(() => (selected.id === meta.id ? 2 : 1.5), false),
+          material: new PolylineDashMaterialProperty({
+            color: new CallbackProperty(
+              () => color.withAlpha((selected.id === meta.id ? 0.9 : 0.55) * systemFade()),
+              false,
+            ),
+            dashLength: 28,
+          }),
+          arcType: ArcType.NONE,
+          show: new CallbackProperty(skyPathOn, false),
+        },
+      });
+      const skyCaptionAt = new Cartesian3();
+      const skyCaptionOffset = new Cartesian2(0, -16);
+      viewer.entities.add({
+        id: `sky-caption-${meta.id}`,
+        position: new CallbackProperty(() => {
+          if (skyPositions.length > 1) {
+            const index = Math.round((skyPositions.length - 1) * 0.25);
+            Cartesian3.clone(skyPositions[index], skyCaptionAt);
+          }
+          return skyCaptionAt;
+        }, false),
+        label: {
+          text: `${meta.label} · next 24 hours`,
+          font: '600 11px Outfit, "Segoe UI", sans-serif',
+          fillColor: Color.WHITE,
+          outlineColor: Color.fromCssColorString('#061018'),
+          outlineWidth: 3,
+          style: LabelStyle.FILL_AND_OUTLINE,
+          horizontalOrigin: HorizontalOrigin.CENTER,
+          verticalOrigin: VerticalOrigin.CENTER,
+          pixelOffset: new CallbackProperty(
+            () => radialLabelOffset(skyCaptionAt, 16, skyCaptionOffset),
+            false,
+          ),
+          show: new CallbackProperty(
+            () => skyPathOn() && pathScreenRadius(skyPositions) > 78,
+            false,
+          ),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      });
+      for (const arrow of skyArrows) {
+        viewer.entities.add({
+          id: `sky-ahead-${meta.id}-${arrow.hour}`,
+          position: new CallbackProperty(() => arrow.from, false),
+          billboard: {
+            image: arrowImage,
+            color,
+            scale: 0.36,
+            rotation: new CallbackProperty(() => arrowRotation(arrow), false),
+            show: new CallbackProperty(
+              () => arrow.ready && (skyHoursOn() || (skyPathOn() && selected.id !== meta.id && arrow.hour === 8)),
+              false,
+            ),
+            verticalOrigin: VerticalOrigin.CENTER,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+          label: {
+            text: `+${arrow.hour}h`,
+            font: '600 12px Outfit, "Segoe UI", sans-serif',
+            fillColor: Color.WHITE,
+            outlineColor: Color.fromCssColorString('#061018'),
+            outlineWidth: 3,
+            style: LabelStyle.FILL_AND_OUTLINE,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.CENTER,
+            pixelOffset: new CallbackProperty(() => skyLabelOffset(arrow), false),
+            show: new CallbackProperty(() => skyHoursOn() && arrow.ready, false),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        });
+      }
+    }
+
     records.set(meta.id, {
       ground,
       top,
@@ -762,6 +841,8 @@ export function createGlobe(container, creditContainer) {
       moonEntity,
       track,
       arrows,
+      skyPositions,
+      skyArrows,
     });
   }
 
@@ -769,35 +850,18 @@ export function createGlobe(container, creditContainer) {
   viewer.entities.add({
     id: 'earth-name',
     position: earthMark,
-    billboard: {
-      image: PLANET_IMAGE.Earth,
-      scale: new CallbackProperty(() => {
-        syncEarthDisc();
-        return earthDiscScale;
-      }, false),
-      color: new CallbackProperty(() => {
-        syncEarthDisc();
-        return earthTint;
-      }, false),
-      verticalOrigin: VerticalOrigin.CENTER,
-      horizontalOrigin: HorizontalOrigin.CENTER,
-      show: new CallbackProperty(() => {
-        syncEarthDisc();
-        return earthTint.alpha > 0.02;
-      }, false),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
     label: systemLabel('Earth', 'Earth', showEarthMoonLabel),
   });
 
   const moonDayPath = [];
   const moonPathHidden = [new Cartesian3(), new Cartesian3(1, 0, 0)];
-  const moonPathArrow = {
+  const moonPathArrows = ARROW_HOURS.map((hour) => ({
+    hour,
     from: new Cartesian3(),
     to: new Cartesian3(),
     rotation: 0,
     ready: false,
-  };
+  }));
   const moonPathColor = Color.fromCssColorString('#d5dde8');
   const moonPathOn = () => pathsVisible && pairPresence() > 0.2 && moonDayPath.length > 2;
   viewer.entities.add({
@@ -808,30 +872,42 @@ export function createGlobe(container, creditContainer) {
         false,
       ),
       width: 2,
-      material: new ColorMaterialProperty(
-        new CallbackProperty(() => moonPathColor.withAlpha(0.85 * pairPresence()), false),
-      ),
+      material: new PolylineDashMaterialProperty({
+        color: new CallbackProperty(() => moonPathColor.withAlpha(0.9 * pairPresence()), false),
+        dashLength: 28,
+      }),
       arcType: ArcType.NONE,
       show: new CallbackProperty(moonPathOn, false),
     },
   });
-  viewer.entities.add({
-    id: 'moon-day-arrow',
-    position: new CallbackProperty(() => moonPathArrow.from, false),
-    billboard: {
-      image: arrowImage,
-      color: Color.fromCssColorString('#d5dde8'),
-      scale: 0.28,
-      rotation: new CallbackProperty(() => arrowRotation(moonPathArrow), false),
-      show: new CallbackProperty(
-        () => moonPathOn() && selected.id === 'Moon' && moonPathArrow.ready,
-        false,
-      ),
-      verticalOrigin: VerticalOrigin.CENTER,
-      horizontalOrigin: HorizontalOrigin.CENTER,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    },
-  });
+  for (const arrow of moonPathArrows) {
+    viewer.entities.add({
+      id: `moon-day-arrow-${arrow.hour}`,
+      position: new CallbackProperty(() => arrow.from, false),
+      billboard: {
+        image: arrowImage,
+        color: moonPathColor,
+        scale: 0.36,
+        rotation: new CallbackProperty(() => arrowRotation(arrow), false),
+        show: new CallbackProperty(() => moonPathOn() && arrow.ready, false),
+        verticalOrigin: VerticalOrigin.CENTER,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      label: {
+        text: `+${arrow.hour}h`,
+        font: '600 12px Outfit, "Segoe UI", sans-serif',
+        fillColor: Color.WHITE,
+        outlineColor: Color.fromCssColorString('#061018'),
+        outlineWidth: 3,
+        style: LabelStyle.FILL_AND_OUTLINE,
+        horizontalOrigin: HorizontalOrigin.LEFT,
+        pixelOffset: new Cartesian2(12, 0),
+        show: new CallbackProperty(() => moonPathOn() && arrow.ready, false),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    });
+  }
 
   let observerOn = false;
   const youVisible = new CallbackProperty(() => observerOn && !systemView(), false);
@@ -880,6 +956,7 @@ export function createGlobe(container, creditContainer) {
   let framed = false;
   let skyJulian = null;
   const orbitEntities = new Map();
+  const orbitSpans = new Map();
   let orbitsFar = true;
   let orbitsDrawn = false;
   let coarseOn = false;
@@ -904,7 +981,7 @@ export function createGlobe(container, creditContainer) {
     coarseOn = coarse;
     orbitsShown = draw;
     scene.fog.enabled = chrome;
-    scene.sun.show = chrome;
+    scene.sun.show = true;
     scene.globe.showGroundAtmosphere = chrome;
     if (scene.skyAtmosphere) scene.skyAtmosphere.show = chrome;
     viewer.camera.frustum.near = far ? 1_000 : globeNear;
@@ -918,6 +995,7 @@ export function createGlobe(container, creditContainer) {
       ? JulianDate.clone(skyJulian, viewer.clock.currentTime)
       : JulianDate.now();
     syncOrbits();
+    syncEarthDisc();
     placeNames();
     if (pathsVisible) {
       for (const record of records.values()) applyPathVisibility(record);
@@ -935,11 +1013,7 @@ export function createGlobe(container, creditContainer) {
 
   function placeNames() {
     syncEarthDisc();
-    if (earthTint.alpha < 0.2 && systemFade() < 0.2) {
-      moonPixel.x = 0;
-      moonPixel.y = 0;
-      return;
-    }
+    if (earthTint.alpha < 0.2 && systemFade() < 0.2) return;
     const sun = records.get('Sun');
     const moon = records.get('Moon');
     if (!sun || !moon) return;
@@ -971,9 +1045,6 @@ export function createGlobe(container, creditContainer) {
     }
     mdx /= mspan;
     mdy /= mspan;
-    const tuck = CesiumMath.clamp((28 - mspan) / 16, 0, 1);
-    moonPixel.x = mdx * 14 * tuck;
-    moonPixel.y = mdy * 14 * tuck;
 
     const items = [];
     const push = (id, screen, dirX, dirY, gap) => {
@@ -1048,30 +1119,143 @@ export function createGlobe(container, creditContainer) {
     }
   }
 
+  const ORBIT_SHIFT = {
+    Mercury: 0,
+    Venus: 0.13,
+    Earth: 0.24,
+    Mars: 0.62,
+    Jupiter: 0.08,
+    Saturn: 0.2,
+    Uranus: 0.3,
+    Neptune: 0.42,
+    Pluto: 0.5,
+  };
+  const orbitMarks = new Map();
+  const orbitOffsets = new Map();
+
+  function orbitPeriod(days) {
+    if (days < 500) return `${Math.round(days)} days`;
+    const years = days / 365.256;
+    const rounded = years < 10 ? years.toFixed(1) : String(Math.round(years));
+    return `${rounded} years`;
+  }
+
+  function orbitVisible(id) {
+    const span = orbitSpans.get(id) || 0;
+    return systemFade() > 0.04 && span > 0 && span <= visibleRadius();
+  }
+
+  function orbitScreenRadius(id) {
+    const span = orbitSpans.get(id) || 0;
+    const world = visibleRadius();
+    if (world <= 0) return 0;
+    const canvas = Math.min(scene.canvas.clientWidth || 1, scene.canvas.clientHeight || 1);
+    return (span / world) * (canvas / 2);
+  }
+
+  function radialLabelOffset(point, reachPx, result) {
+    const screen = scene.cartesianToCanvasCoordinates(point);
+    const earth = scene.cartesianToCanvasCoordinates(Cartesian3.ZERO);
+    if (!defined(screen) || !defined(earth)) return result;
+    const dx = screen.x - earth.x;
+    const dy = screen.y - earth.y;
+    const len = Math.hypot(dx, dy) || 1;
+    result.x = (dx / len) * reachPx;
+    result.y = (dy / len) * reachPx;
+    return result;
+  }
+
+  function orbitReach(positions) {
+    let reach = 0;
+    for (const point of positions) {
+      const span = Math.hypot(point.x, point.y, point.z);
+      if (span > reach) reach = span;
+    }
+    return reach;
+  }
+
+  function visibleRadius() {
+    const frustum = viewer.camera.frustum;
+    const fovy = frustum.fovy || CesiumMath.toRadians(60);
+    const width = scene.canvas.clientWidth || 1;
+    const height = scene.canvas.clientHeight || 1;
+    const halfY = fovy / 2;
+    const halfX = Math.atan(Math.tan(halfY) * (width / height));
+    return cameraDistance() * Math.tan(Math.min(halfX, halfY)) * 0.8;
+  }
+
   function setOrbits(orbits) {
     for (const orbit of orbits) {
       const positions = orbit.positions.map((point) => new Cartesian3(point.x, point.y, point.z));
+      const span = orbitReach(positions);
+      let mark = orbitMarks.get(orbit.id);
+      if (!mark) {
+        mark = new Cartesian3();
+        orbitMarks.set(orbit.id, mark);
+      }
+      if (positions.length > 1) {
+        let farthest = 0;
+        let index = 0;
+        for (let i = 0; i < positions.length; i += 1) {
+          const point = positions[i];
+          const reach = point.x * point.x + point.y * point.y + point.z * point.z;
+          if (reach > farthest) {
+            farthest = reach;
+            index = i;
+          }
+        }
+        const shift = Math.round((ORBIT_SHIFT[orbit.id] ?? 0) * (positions.length - 1));
+        Cartesian3.clone(positions[(index + shift) % positions.length], mark);
+      }
+      let offset = orbitOffsets.get(orbit.id);
+      if (!offset) {
+        offset = new Cartesian2(0, -16);
+        orbitOffsets.set(orbit.id, offset);
+      }
       let entity = orbitEntities.get(orbit.id);
       if (!entity) {
+        const name = BODIES.find((body) => body.id === orbit.id)?.label ?? orbit.id;
         entity = viewer.entities.add({
           id: `orbit-${orbit.id}`,
           show: orbitsShown,
+          position: new CallbackProperty(() => orbitMarks.get(orbit.id), false),
+          label: {
+            text: `${name} · ${orbitPeriod(orbit.days)}`,
+            font: '600 11px Outfit, "Segoe UI", sans-serif',
+            fillColor: Color.WHITE,
+            outlineColor: Color.fromCssColorString('#061018'),
+            outlineWidth: 3,
+            style: LabelStyle.FILL_AND_OUTLINE,
+            horizontalOrigin: HorizontalOrigin.CENTER,
+            verticalOrigin: VerticalOrigin.CENTER,
+            pixelOffset: new CallbackProperty(
+              () => radialLabelOffset(orbitMarks.get(orbit.id), 14, offset),
+              false,
+            ),
+            show: new CallbackProperty(
+              () => orbitVisible(orbit.id) && orbitScreenRadius(orbit.id) > 70,
+              false,
+            ),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
           polyline: {
             positions,
             width: 1,
             material: new ColorMaterialProperty(
               new CallbackProperty(() => {
                 const tint = Color.fromCssColorString(orbit.color);
-                return tint.withAlpha(0.28 * systemFade());
+                return tint.withAlpha(0.2 * systemFade());
               }, false),
             ),
             arcType: ArcType.NONE,
+            show: new CallbackProperty(() => orbitVisible(orbit.id), false),
           },
         });
         orbitEntities.set(orbit.id, entity);
       } else {
         entity.polyline.positions = positions;
       }
+      orbitSpans.set(orbit.id, span);
     }
   }
 
@@ -1130,6 +1314,32 @@ export function createGlobe(container, creditContainer) {
     return dx * arrow.from.x + dy * arrow.from.y + dz * arrow.from.z > 0;
   }
 
+  function pathScreenRadius(positions) {
+    const earth = scene.cartesianToCanvasCoordinates(Cartesian3.ZERO);
+    if (!defined(earth) || positions.length < 2) return Number.POSITIVE_INFINITY;
+    let reach = 0;
+    const step = Math.max(1, Math.floor(positions.length / 12));
+    for (let i = 0; i < positions.length; i += step) {
+      const point = scene.cartesianToCanvasCoordinates(positions[i]);
+      if (!defined(point)) continue;
+      const span = Math.hypot(point.x - earth.x, point.y - earth.y);
+      if (span > reach) reach = span;
+    }
+    return reach;
+  }
+
+  function skyLabelOffset(arrow) {
+    const point = scene.cartesianToCanvasCoordinates(arrow.from);
+    const earth = scene.cartesianToCanvasCoordinates(Cartesian3.ZERO);
+    if (!defined(point) || !defined(earth)) return arrow.offset;
+    const dx = point.x - earth.x;
+    const dy = point.y - earth.y;
+    const len = Math.hypot(dx, dy) || 1;
+    arrow.offset.x = (dx / len) * 22;
+    arrow.offset.y = (dy / len) * 22;
+    return arrow.offset;
+  }
+
   function arrowRotation(arrow) {
     const start = scene.cartesianToCanvasCoordinates(arrow.from);
     const end = scene.cartesianToCanvasCoordinates(arrow.to);
@@ -1158,25 +1368,40 @@ export function createGlobe(container, creditContainer) {
     for (const record of records.values()) applyPathVisibility(record);
   }
 
-  function setMoonDayPath(samples) {
-    moonDayPath.length = 0;
+  function placeAhead(samples, positions, arrows, pointAt) {
+    positions.length = 0;
     for (const sample of samples) {
-      moonDayPath.push(new Cartesian3(sample.x, sample.y, sample.z));
+      const point = pointAt(sample);
+      if (point) positions.push(point);
     }
-    if (moonDayPath.length < 8) {
-      moonPathArrow.ready = false;
+    if (samples.length < 2 || positions.length < 2) {
+      for (const arrow of arrows) arrow.ready = false;
       return;
     }
-    const index = 12;
-    moonPathArrow.ready = true;
-    Cartesian3.clone(moonDayPath[index], moonPathArrow.from);
-    Cartesian3.clone(moonDayPath[Math.min(moonDayPath.length - 1, index + 2)], moonPathArrow.to);
+    const stepHours = samples[1].hours - samples[0].hours || 1;
+    for (const arrow of arrows) {
+      const index = Math.round(arrow.hour / stepHours);
+      const next = Math.min(positions.length - 1, index + 3);
+      arrow.ready = index > 0 && next > index && next < positions.length;
+      if (arrow.ready) {
+        Cartesian3.clone(positions[index], arrow.from);
+        Cartesian3.clone(positions[next], arrow.to);
+      }
+    }
+  }
+
+  function setMoonDayPath(samples) {
+    placeAhead(samples, moonDayPath, moonPathArrows, (sample) => new Cartesian3(sample.x, sample.y, sample.z));
   }
 
   function setTracks(tracks) {
     for (const track of tracks) {
       const record = records.get(track.id);
       if (track.id === 'Moon') setMoonDayPath(track.samples);
+      else placeAhead(track.samples, record.skyPositions, record.skyArrows, (sample) => {
+        if (!sample.display) return null;
+        return new Cartesian3(sample.display.x, sample.display.y, sample.display.z);
+      });
       const samples = [];
       for (const sample of track.samples) {
         const point = new Cartesian3();
@@ -1430,16 +1655,23 @@ export function createGlobe(container, creditContainer) {
 
   viewer.camera.moveEnd.addEventListener(finishMouseZoom);
 
+  function originalView() {
+    return {
+      longitude: ((homeLongitude + 68 + 540) % 360) - 180,
+      latitude: 14,
+    };
+  }
+
   function lookHome(instant) {
     cancelCenter();
     placing = false;
     poleLock = false;
     leftHeight = HOME_RANGE_M;
     setZoomCeiling(false);
-    const longitude = ((homeLongitude + 68 + 540) % 360) - 180;
+    const { longitude, latitude } = originalView();
     groundLon = longitude;
-    groundLat = 14;
-    const destination = Cartesian3.fromDegrees(longitude, 14, HOME_RANGE_M);
+    groundLat = latitude;
+    const destination = Cartesian3.fromDegrees(longitude, latitude, HOME_RANGE_M);
     const orientation = {
       heading: 0,
       pitch: CesiumMath.toRadians(-90),
@@ -1572,6 +1804,7 @@ export function createGlobe(container, creditContainer) {
     select,
     setOrbits,
     moving: () => phoneMoving,
+    inSystem: () => systemFade() > 0.2,
     whenSelect(callback) {
       onSelect = callback;
     },

@@ -202,7 +202,7 @@ export function solarOrbits(date, count = 96) {
       if (span < 1e12) continue;
       positions.push(point);
     }
-    return { id, color: meta?.color ?? EARTH_ORBIT_COLOR, positions };
+    return { id, days, color: meta?.color ?? EARTH_ORBIT_COLOR, positions };
   });
 }
 
@@ -274,19 +274,26 @@ const TRACK_STEP_MINUTES = 20;
  */
 export function computeTracks(start = new Date()) {
   const steps = (TRACK_HOURS * 60) / TRACK_STEP_MINUTES;
+  const dates = [];
+  const earthHelios = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const date = new Date(start.getTime() + i * TRACK_STEP_MINUTES * 60 * 1000);
+    dates.push(date);
+    earthHelios.push(HelioVector(Body.Earth, date));
+  }
   return BODIES.map((meta) => {
     const body = Body[meta.id];
-    const samples = [];
-    for (let i = 0; i <= steps; i += 1) {
-      const date = new Date(start.getTime() + i * TRACK_STEP_MINUTES * 60 * 1000);
+    const samples = dates.map((date, index) => {
       const fixed = earthFixedPosition(body, date);
-      samples.push({
+      const display = systemPlace(body, earthHelios[index], date);
+      return {
         x: fixed.x,
         y: fixed.y,
         z: fixed.z,
-        hours: (i * TRACK_STEP_MINUTES) / 60,
-      });
-    }
+        display,
+        hours: (index * TRACK_STEP_MINUTES) / 60,
+      };
+    });
     return { id: meta.id, samples };
   });
 }

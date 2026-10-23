@@ -479,6 +479,7 @@ pathsButton.addEventListener('click', () => {
   pathsOn = !pathsOn;
   pathsButton.setAttribute('aria-pressed', String(pathsOn));
   globe.setPathsVisible(pathsOn);
+  syncLegend();
   lede.textContent = pathsOn
     ? 'Lines trace the next 24 hours. Arrows on the selected body show which way it goes.'
     : 'Pins mark where each body is straight overhead. Zoom out to see the solar system.';
@@ -487,6 +488,13 @@ pathsButton.addEventListener('click', () => {
     refreshTracks();
   }
 });
+
+function syncLegend() {
+  const legend = document.getElementById('legend');
+  const hours = document.getElementById('legend-hours');
+  legend.hidden = !globe.inSystem();
+  hours.hidden = !pathsOn;
+}
 
 function tick() {
   const date = skyDate();
@@ -498,6 +506,7 @@ function tick() {
   renderList();
   renderDetail();
   scheduleRiseSet();
+  syncLegend();
 }
 
 function usePlace(latitude, longitude, name) {
@@ -754,6 +763,7 @@ document.addEventListener('visibilitychange', () => {
 select('Sun', false);
 tick();
 window.setInterval(() => {
+  syncLegend();
   if (viewed) {
     renderClocks(viewed);
     return;
