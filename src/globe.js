@@ -29,6 +29,7 @@ import {
   WebMercatorTilingScheme,
   defined,
 } from 'cesium';
+import { createCelestialLayer } from './celestial.js';
 import { AU_DISPLAY_M, BODIES, eclipticNorth } from './sky.js';
 
 const BEACON_M = 2_000_000;
@@ -402,6 +403,7 @@ export function createGlobe(container, creditContainer) {
   scene.sun.show = true;
   scene.moon.show = false;
   scene.backgroundColor = Color.fromCssColorString('#02040a');
+  const celestial = createCelestialLayer(viewer);
   scene.fog.enabled = true;
   scene.pickTranslucentDepth = true;
   scene.screenSpaceCameraController.minimumZoomDistance = 40;
@@ -974,6 +976,7 @@ export function createGlobe(container, creditContainer) {
     const draw = systemFade() > 0.04;
     const error = coarse ? 8 : 1.6;
     if (scene.globe.maximumScreenSpaceError !== error) scene.globe.maximumScreenSpaceError = error;
+    celestial.setFade(systemFade());
     if (chrome === orbitsFar && far === orbitsDrawn && coarse === coarseOn && draw === orbitsShown) return;
     const changed = chrome !== orbitsFar || far !== orbitsDrawn || coarse !== coarseOn;
     orbitsFar = chrome;
@@ -1263,7 +1266,12 @@ export function createGlobe(container, creditContainer) {
 
   function setSkyTime(date) {
     skyWhen = date ? new Date(date.getTime()) : new Date();
-    skyJulian = date ? JulianDate.fromDate(date) : null;
+    skyJulian = JulianDate.fromDate(skyWhen);
+    celestial.place(skyWhen);
+  }
+
+  function setSkyVisible(visible) {
+    celestial.setGround(visible);
   }
 
   function placeBody(record, body) {
@@ -1795,6 +1803,7 @@ export function createGlobe(container, creditContainer) {
     setSkyTime,
     setTracks,
     setPathsVisible,
+    setSkyVisible,
     centerOn,
     zoomIn,
     zoomOut,

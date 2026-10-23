@@ -150,6 +150,24 @@ function earthFixedPosition(body, date) {
   };
 }
 
+/**
+ * J2000 equatorial direction, in the same Earth-fixed frame as the planets.
+ * `raHours` is right ascension in hours, `decDeg` is declination in degrees.
+ */
+export function fixedSky(raHours, decDeg, date, radius = 1) {
+  const ra = raHours * (Math.PI / 12);
+  const dec = decDeg * (Math.PI / 180);
+  const cosDec = Math.cos(dec);
+  const turned = eqjAuToDisplay(cosDec * Math.cos(ra), cosDec * Math.sin(ra), Math.sin(dec), date);
+  const span = Math.hypot(turned.x, turned.y, turned.z) || 1;
+  const scale = radius / span;
+  return {
+    x: turned.x * scale,
+    y: turned.y * scale,
+    z: turned.z * scale,
+  };
+}
+
 function eqjAuToDisplay(x, y, z, date) {
   const eqd = RotateVector(Rotation_EQJ_EQD(date), { x, y, z });
   const gast = SiderealTime(date) * 15 * (Math.PI / 180);
