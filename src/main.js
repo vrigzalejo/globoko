@@ -132,8 +132,14 @@ function skyDate() {
   return viewed ?? new Date();
 }
 
+function minuteMark(date) {
+  const mark = new Date(date.getTime());
+  mark.setSeconds(0, 0);
+  return mark;
+}
+
 function leadText(date) {
-  const minutes = Math.round((date.getTime() - Date.now()) / 60000);
+  const minutes = Math.round((minuteMark(date).getTime() - minuteMark(new Date()).getTime()) / 60000);
   const ahead = minutes >= 0;
   const abs = Math.abs(minutes);
   if (abs < 1) return 'Now';
@@ -160,6 +166,7 @@ function renderClocks(date) {
   } else {
     timeLabel.textContent = 'Now';
   }
+  stampInputs(date);
   if (locateStatus) {
     clockPlace.hidden = false;
     clockPlace.textContent = locateStatus;
@@ -208,7 +215,7 @@ function planBounds() {
 }
 
 function jumpTo(date) {
-  const minutes = Math.round((date.getTime() - Date.now()) / 60000);
+  const minutes = Math.round((minuteMark(date).getTime() - minuteMark(new Date()).getTime()) / 60000);
   const bounds = planBounds();
   let min = bounds.min;
   let max = bounds.max;
@@ -222,7 +229,7 @@ function jumpTo(date) {
 }
 
 function applyMinutes(minutes, refreshPaths = true) {
-  viewed = minutes === 0 ? null : new Date(Date.now() + minutes * 60_000);
+  viewed = minutes === 0 ? null : minuteMark(new Date(Date.now() + minutes * 60_000));
   globe.setSkyTime(viewed);
   riseKey = '';
   if (refreshPaths) tracksAt = 0;
@@ -454,8 +461,23 @@ function renderList() {
 
 let tracksAt = 0;
 let pathsOn = false;
+let skyOn = false;
 const pathsButton = document.getElementById('paths');
+const skyButton = document.getElementById('sky');
 const lede = document.getElementById('lede');
+
+function describeView() {
+  if (pathsOn && skyOn) {
+    return 'Lines trace the next 24 hours. Sky labels mark where each constellation and galaxy is straight overhead.';
+  }
+  if (pathsOn) {
+    return 'Lines trace the next 24 hours. Arrows on the selected body show which way it goes.';
+  }
+  if (skyOn) {
+    return 'Labels mark where each constellation and galaxy is straight overhead. The line is where the Milky Way passes overhead.';
+  }
+  return 'Pins mark where each body is straight overhead. Zoom out to see the solar system.';
+}
 
 function refreshTracks() {
   const now = Date.now();
@@ -480,13 +502,18 @@ pathsButton.addEventListener('click', () => {
   pathsButton.setAttribute('aria-pressed', String(pathsOn));
   globe.setPathsVisible(pathsOn);
   syncLegend();
-  lede.textContent = pathsOn
-    ? 'Lines trace the next 24 hours. Arrows on the selected body show which way it goes.'
-    : 'Pins mark where each body is straight overhead. Zoom out to see the solar system.';
+  lede.textContent = describeView();
   if (pathsOn) {
     tracksAt = 0;
     refreshTracks();
   }
+});
+
+skyButton.addEventListener('click', () => {
+  skyOn = !skyOn;
+  skyButton.setAttribute('aria-pressed', String(skyOn));
+  globe.setSkyVisible(skyOn);
+  lede.textContent = describeView();
 });
 
 function syncLegend() {
@@ -498,6 +525,7 @@ function syncLegend() {
 
 function tick() {
   const date = skyDate();
+  globe.setSkyTime(date);
   const sky = computeSky(date, place);
   bodies = globe.update(sky.bodies);
   refreshOrbits(date);
@@ -620,11 +648,51 @@ document.getElementById('zoom-original').addEventListener('click', () => globe.z
 const timeNow = document.getElementById('time-now');
 const timeRange = document.getElementById('time-range');
 const timeLabel = document.getElementById('time-label');
+const timeDate = document.getElementById('time-date');
+const timeClock = document.getElementById('time-clock');
+
+function fieldDate(date) {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function fieldTime(date) {
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
+function stampInputs(date) {
+  const editing = document.activeElement === timeDate || document.activeElement === timeClock;
+  if (!editing) {
+    const day = fieldDate(date);
+    const clock = fieldTime(date);
+    if (timeDate.value !== day) timeDate.value = day;
+    if (timeClock.value !== clock) timeClock.value = clock;
+  }
+  const now = new Date();
+  timeDate.min = fieldDate(new Date(now.getTime() - TIME_FAR * 60_000));
+  timeDate.max = fieldDate(new Date(now.getTime() + TIME_FAR * 60_000));
+}
+
+function commitInputs() {
+  if (!timeDate.value) return;
+  const [year, month, day] = timeDate.value.split('-').map(Number);
+  const [hour, minute] = (timeClock.value || '00:00').split(':').map(Number);
+  const next = new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
+  if (Number.isNaN(next.getTime())) return;
+  jumpTo(next);
+}
 const openingBounds = planBounds();
 timeRange.min = String(openingBounds.min);
 timeRange.max = String(openingBounds.max);
 
 timeNow.addEventListener('click', () => jumpTo(new Date()));
+timeDate.addEventListener('change', commitInputs);
+timeClock.addEventListener('change', commitInputs);
+timeDate.addEventListener('blur', () => stampInputs(skyDate()));
+timeClock.addEventListener('blur', () => stampInputs(skyDate()));
 timeRange.addEventListener('input', () => applyMinutes(Number(timeRange.value), false));
 timeRange.addEventListener('change', () => applyMinutes(Number(timeRange.value), true));
 document.getElementById('time-plus').addEventListener('click', () => {

@@ -273,13 +273,35 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   white-space: nowrap;
 }
 .legend-orbit,
-.legend-dash {
+.legend-dash,
+.legend-stars {
   flex: none;
   width: 28px;
   height: 0;
   border-top: 2px solid #d5dde8;
 }
 .legend-dash { border-top-style: dashed; border-top-color: var(--gold); }
+.legend-stars {
+  position: relative;
+  border-top-color: #b7c6de;
+}
+.legend-stars::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fff;
+}
+.legend-galaxy {
+  flex: none;
+  width: 28px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #fff 0%, #c5d4ff 42%, transparent 72%);
+}
 
 #panel {
   position: absolute;
@@ -514,7 +536,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   left: var(--map-left);
   right: max(16px, var(--safe-r));
   bottom: max(18px, var(--safe-b));
-  width: min(680px, calc(100vw - var(--map-left) - 24px));
+  width: min(920px, calc(100vw - var(--map-left) - 24px));
   margin-inline: auto;
   display: flex;
   align-items: center;
@@ -541,6 +563,20 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .time button { flex: none; }
 .time-slider { display: flex; align-items: center; flex: 1 1 80px; min-width: 64px; }
 #time-range { width: 100%; min-width: 64px; height: 28px; accent-color: var(--gold); }
+#time-date, #time-clock {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color-scheme: dark;
+}
+#time-date { width: 142px; flex: none; }
+#time-clock { width: 96px; flex: none; }
+#time-date:hover, #time-clock:hover { border-color: rgba(255, 176, 32, 0.55); }
 #time-label {
   flex: none;
   min-width: 72px;
@@ -621,7 +657,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 
 @media (max-width: 959px) {
-  :root { --sheet: 52px; --time-h: calc(120px + var(--safe-b)); }
+  :root { --sheet: 52px; --time-h: calc(168px + var(--safe-b)); }
 
   .topbar {
     top: calc(8px + var(--safe-t));
@@ -693,19 +729,22 @@ button:focus-visible, input:focus-visible, a:focus-visible {
     gap: 6px 8px;
     padding: 8px max(10px, var(--safe-r)) calc(8px + var(--safe-b)) max(10px, var(--safe-l));
   }
-  #time-now { grid-column: 1; grid-row: 1; }
-  .time-slider { grid-column: 2; grid-row: 1; min-width: 0; }
+  #time-date { grid-column: 1 / 3; grid-row: 1; width: auto; }
+  #time-clock { grid-column: 3; grid-row: 1; width: auto; }
+  #time-date, #time-clock { height: 44px; font-size: 16px; }
+  #time-now { grid-column: 1; grid-row: 2; }
+  .time-slider { grid-column: 2; grid-row: 2; min-width: 0; }
   #time-label {
     grid-column: 3;
-    grid-row: 1;
+    grid-row: 2;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: right;
   }
-  #time-plus { grid-column: 1; grid-row: 2; }
-  #time-tonight { grid-column: 2; grid-row: 2; }
-  #time-tomorrow { grid-column: 3; grid-row: 2; }
+  #time-plus { grid-column: 1; grid-row: 3; }
+  #time-tonight { grid-column: 2; grid-row: 3; }
+  #time-tomorrow { grid-column: 3; grid-row: 3; }
   #time-plus, #time-tonight, #time-tomorrow { width: 100%; }
   .time button { height: 44px; }
 
@@ -755,7 +794,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
     scrollbar-width: none;
     gap: 8px;
   }
-  .time button, #time-label { width: auto; flex: none; grid-column: auto; grid-row: auto; }
+  .time button, #time-label, #time-date, #time-clock { width: auto; flex: none; grid-column: auto; grid-row: auto; }
+  #time-date, #time-clock { height: 32px; font-size: 12px; }
   #time-plus, #time-tonight, #time-tomorrow { width: auto; }
   .time-slider { flex: 1 1 72px; width: auto; grid-column: auto; grid-row: auto; }
   .zoom { flex-direction: row; bottom: calc(var(--time-h) + var(--sheet) + 8px); }
