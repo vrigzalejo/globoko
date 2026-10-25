@@ -31,6 +31,8 @@ npm run preview
 
 Imagery is Esri’s world mosaic on a smooth Earth. To load Cesium world terrain, set `VITE_CESIUM_ION_TOKEN` in `.env.local`.
 
+For Google Analytics, set `VITE_GA_MEASUREMENT_ID` (a `G-…` id) in `.env.local` for local builds, or as a repository secret for the GitHub Pages build. Leave it unset to skip analytics.
+
 ## Continuous integration
 
 Every pull request runs `npm ci` and `npm run build`. A push to `main` publishes the site with GitHub Pages.

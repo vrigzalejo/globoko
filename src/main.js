@@ -1,6 +1,7 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 import './style.css';
 import tzlookup from 'tz-lookup';
+import { startAnalytics } from './analytics.js';
 import { createGlobe } from './globe.js';
 import { currentPlan } from './plan.js';
 import { readPlaces, rememberSavedPlace, removePlace, sameSpot, writePlaces } from './places.js';
@@ -847,6 +848,7 @@ document.addEventListener('visibilitychange', () => {
 
 select('Sun', false);
 tick();
+startAnalytics();
 window.setInterval(() => {
   syncLegend();
   if (viewed) {
