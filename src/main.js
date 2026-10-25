@@ -8,9 +8,11 @@ import { BODIES, computeSky, computeTracks, moonPhaseViews, riseSet, solarOrbits
 import {
   formatAltitude,
   formatAltitudeSentence,
+  dateFromWallTime,
+  fieldDate,
+  fieldTime,
   formatClock,
   formatDec,
-  formatPlaceClock,
   formatDistance,
   formatLatLon,
   formatLightTime,
@@ -20,7 +22,7 @@ import {
   formatRa,
   formatWhen,
   moonPhaseName,
-  zonesMatch,
+  wallTimeParts,
 } from './format.js';
 
 const FACTS = [
@@ -151,8 +153,13 @@ function leadText(date) {
   return `${hours}h ${rest}m ${way}`;
 }
 
+function activeZone() {
+  return place?.timeZone || null;
+}
+
 function renderClocks(date) {
-  const clock = formatClock(date);
+  const zone = activeZone();
+  const clock = formatClock(date, zone);
   clockLocal.textContent = clock.local;
   clockUtc.textContent = clock.utc;
   const traveling = viewed != null;
@@ -161,7 +168,7 @@ function renderClocks(date) {
   liveLabel.textContent = traveling ? 'Then' : 'Live';
   timeNow.disabled = !traveling;
   if (traveling) {
-    clockLive.textContent = `Live ${formatClock(new Date()).local}`;
+    clockLive.textContent = `Live ${formatClock(new Date(), zone).local}`;
     timeLabel.textContent = leadText(viewed);
   } else {
     timeLabel.textContent = 'Now';
@@ -170,12 +177,11 @@ function renderClocks(date) {
   if (locateStatus) {
     clockPlace.hidden = false;
     clockPlace.textContent = locateStatus;
+  } else if (place) {
+    clockPlace.hidden = false;
+    clockPlace.textContent = placeClockName(place.name);
   } else {
-    const zone = place?.timeZone;
-    const now = new Date();
-    const showPlace = Boolean(zone) && !zonesMatch(zone, now);
-    clockPlace.hidden = !showPlace;
-    if (showPlace) clockPlace.textContent = formatPlaceClock(now, zone, placeClockName(place.name));
+    clockPlace.hidden = true;
   }
   fitPanel();
 }
@@ -201,10 +207,24 @@ function timeZoneAt(latitude, longitude) {
 }
 
 function skyMoment(dayOffset, hour) {
-  const target = new Date();
-  target.setDate(target.getDate() + dayOffset);
-  target.setHours(hour, 0, 0, 0);
-  return target;
+  const zone = activeZone();
+  const now = wallTimeParts(new Date(), zone);
+  const noon = dateFromWallTime({
+    year: now.year,
+    month: now.month,
+    day: now.day,
+    hour: 12,
+  }, zone);
+  const shifted = new Date(noon.getTime() + dayOffset * 86_400_000);
+  const day = wallTimeParts(shifted, zone);
+  return dateFromWallTime({
+    year: day.year,
+    month: day.month,
+    day: day.day,
+    hour,
+    minute: 0,
+    second: 0,
+  }, zone);
 }
 
 const TIME_FAR = 50 * 24 * 60;
@@ -311,8 +331,8 @@ function renderDetail() {
   setFact('constellation', body.constellation);
   setFact('ra', formatRa(body.raHours));
   setFact('dec', formatDec(body.decDeg));
-  setFact('rise', place ? formatWhen(riseInfo.rise) : null);
-  setFact('set', place ? formatWhen(riseInfo.set) : null);
+  setFact('rise', place ? formatWhen(riseInfo.rise, activeZone()) : null);
+  setFact('set', place ? formatWhen(riseInfo.set, activeZone()) : null);
   setFact('rings', body.ringTilt == null ? null : `${Math.abs(body.ringTilt).toFixed(1)}°`);
 
   placeLabel.textContent = locateStatus
@@ -348,7 +368,8 @@ function renderPhases(body) {
   phaseList.replaceChildren();
   for (const phase of moonPhaseViews(when, place)) {
     const showing = Math.abs(phase.viewDate.getTime() - when.getTime()) < 2 * 60_000;
-    const sight = formatPhaseSight(phase);
+    const zone = activeZone();
+    const sight = formatPhaseSight(phase, zone);
     const item = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
@@ -356,7 +377,7 @@ function renderPhases(body) {
     const name = document.createElement('strong');
     name.textContent = phase.name;
     const detail = document.createElement('small');
-    const whenText = showing ? 'Showing this view' : formatPhaseWhen(phase.date);
+    const whenText = showing ? 'Showing this view' : formatPhaseWhen(phase.date, new Date(), zone);
     detail.textContent = sight ? `${whenText} · ${sight}` : whenText;
     button.append(name, detail);
     button.addEventListener('click', () => {
@@ -651,36 +672,32 @@ const timeLabel = document.getElementById('time-label');
 const timeDate = document.getElementById('time-date');
 const timeClock = document.getElementById('time-clock');
 
-function fieldDate(date) {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function fieldTime(date) {
-  const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  return `${hour}:${minute}`;
-}
-
 function stampInputs(date) {
+  const zone = activeZone();
   const editing = document.activeElement === timeDate || document.activeElement === timeClock;
   if (!editing) {
-    const day = fieldDate(date);
-    const clock = fieldTime(date);
+    const day = fieldDate(date, zone);
+    const clock = fieldTime(date, zone);
     if (timeDate.value !== day) timeDate.value = day;
     if (timeClock.value !== clock) timeClock.value = clock;
   }
   const now = new Date();
-  timeDate.min = fieldDate(new Date(now.getTime() - TIME_FAR * 60_000));
-  timeDate.max = fieldDate(new Date(now.getTime() + TIME_FAR * 60_000));
+  timeDate.min = fieldDate(new Date(now.getTime() - TIME_FAR * 60_000), zone);
+  timeDate.max = fieldDate(new Date(now.getTime() + TIME_FAR * 60_000), zone);
 }
 
 function commitInputs() {
   if (!timeDate.value) return;
   const [year, month, day] = timeDate.value.split('-').map(Number);
   const [hour, minute] = (timeClock.value || '00:00').split(':').map(Number);
-  const next = new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
+  const next = dateFromWallTime({
+    year,
+    month: month || 1,
+    day: day || 1,
+    hour: hour || 0,
+    minute: minute || 0,
+    second: 0,
+  }, activeZone());
   if (Number.isNaN(next.getTime())) return;
   jumpTo(next);
 }

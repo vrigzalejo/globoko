@@ -89,16 +89,80 @@ export function moonPhaseName(degrees) {
   return 'Waning crescent';
 }
 
-function formatHour(date) {
+function zoneOptions(timeZone) {
+  return timeZone ? { timeZone } : {};
+}
+
+function formatHour(date, timeZone) {
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...zoneOptions(timeZone),
   }).format(date);
 }
 
+/** Calendar and clock parts for `date` in `timeZone`, or this device if omitted. */
+export function wallTimeParts(date, timeZone) {
+  const parts = {};
+  for (const part of new Intl.DateTimeFormat('en-US', {
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    ...zoneOptions(timeZone),
+  }).formatToParts(date)) {
+    if (part.type !== 'literal') parts[part.type] = part.value;
+  }
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second || 0),
+  };
+}
+
+/** Instant that shows as this wall clock in `timeZone`, or this device if omitted. */
+export function dateFromWallTime(parts, timeZone) {
+  const year = parts.year;
+  const month = parts.month;
+  const day = parts.day;
+  const hour = parts.hour ?? 0;
+  const minute = parts.minute ?? 0;
+  const second = parts.second ?? 0;
+  if (!timeZone) return new Date(year, month - 1, day, hour, minute, second, 0);
+  const desired = Date.UTC(year, month - 1, day, hour, minute, second);
+  let guess = desired;
+  for (let step = 0; step < 4; step += 1) {
+    const seen = wallTimeParts(new Date(guess), timeZone);
+    const asUtc = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second);
+    guess += desired - asUtc;
+  }
+  return new Date(guess);
+}
+
+export function fieldDate(date, timeZone) {
+  const parts = wallTimeParts(date, timeZone);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+export function fieldTime(date, timeZone) {
+  const parts = wallTimeParts(date, timeZone);
+  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+}
+
+function dayKey(date, timeZone) {
+  const parts = wallTimeParts(date, timeZone);
+  return Date.UTC(parts.year, parts.month - 1, parts.day);
+}
+
 /** How the Moon sits in the sky at a phase, from a chosen place. */
-export function formatPhaseSight(phase) {
+export function formatPhaseSight(phase, timeZone) {
   if (phase.altitude == null) return '';
   if (phase.name === 'New Moon') {
     return phase.up
@@ -107,16 +171,16 @@ export function formatPhaseSight(phase) {
   }
   if (phase.up) {
     const height = `${Math.round(phase.altitude)}° up`;
-    return phase.set ? `${height}, sets ${formatHour(phase.set)}` : height;
+    return phase.set ? `${height}, sets ${formatHour(phase.set, timeZone)}` : height;
   }
   if (phase.rise) {
-    const until = phase.set ? `, up until ${formatHour(phase.set)}` : '';
-    return `Rises ${formatHour(phase.rise)}${until}`;
+    const until = phase.set ? `, up until ${formatHour(phase.set, timeZone)}` : '';
+    return `Rises ${formatHour(phase.rise, timeZone)}${until}`;
   }
   return 'Below the horizon';
 }
 
-export function formatPhaseWhen(date, from = new Date()) {
+export function formatPhaseWhen(date, from = new Date(), timeZone) {
   const when = new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
     month: 'short',
@@ -124,10 +188,9 @@ export function formatPhaseWhen(date, from = new Date()) {
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...zoneOptions(timeZone),
   }).format(date);
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const days = Math.round((target - start) / 86_400_000);
+  const days = Math.round((dayKey(date, timeZone) - dayKey(from, timeZone)) / 86_400_000);
   let relative = `in ${days} days`;
   if (days === 0) relative = 'today';
   else if (days === 1) relative = 'tomorrow';
@@ -136,13 +199,14 @@ export function formatPhaseWhen(date, from = new Date()) {
   return `${when} · ${relative}`;
 }
 
-export function formatWhen(date) {
+export function formatWhen(date, timeZone) {
   if (!date) return 'None in the next 2 days';
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...zoneOptions(timeZone),
   }).format(date);
 }
 
@@ -183,7 +247,7 @@ export function formatPlaceClock(date, timeZone, label) {
   return there === here ? `${label} · ${time}` : `${label} · ${there}, ${time}`;
 }
 
-export function formatClock(date) {
+export function formatClock(date, timeZone) {
   const local = new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
     month: 'short',
@@ -191,6 +255,7 @@ export function formatClock(date) {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
+    ...(timeZone ? { timeZone, timeZoneName: 'short' } : {}),
   }).format(date);
   const utc = new Intl.DateTimeFormat(undefined, {
     hour: '2-digit',
