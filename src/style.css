@@ -273,14 +273,12 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   white-space: nowrap;
 }
 .legend-orbit,
-.legend-dash,
 .legend-stars {
   flex: none;
   width: 28px;
   height: 0;
   border-top: 2px solid #d5dde8;
 }
-.legend-dash { border-top-style: dashed; border-top-color: var(--gold); }
 .legend-stars {
   position: relative;
   border-top-color: #b7c6de;
@@ -363,6 +361,16 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   scrollbar-width: thin;
   scrollbar-color: rgba(232, 238, 246, 0.28) transparent;
 }
+.body-group {
+  margin: 10px 10px 4px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.body-group:first-child { margin-top: 2px; }
 
 .body {
   width: 100%;
@@ -423,6 +431,48 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 #facts dt { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
 #facts dd { margin: 2px 0 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; }
 
+#showers {
+  margin: 12px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.showers-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#shower-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+#shower-list li {
+  display: grid;
+  gap: 2px;
+}
+#shower-list strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+#shower-list .shower-kind {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+#shower-list small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
 #phases { margin: 10px 0; }
 .phases-title {
   margin: 0 0 6px;

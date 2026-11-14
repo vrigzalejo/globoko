@@ -5,7 +5,17 @@ import { startAnalytics } from './analytics.js';
 import { createGlobe } from './globe.js';
 import { currentPlan } from './plan.js';
 import { readPlaces, rememberSavedPlace, removePlace, sameSpot, writePlaces } from './places.js';
-import { BODIES, computeSky, computeTracks, moonPhaseViews, riseSet, solarOrbits } from './sky.js';
+import { peakLabel } from './meteors.js';
+import {
+  BODIES,
+  BODY_KINDS,
+  KIND_LABEL,
+  computeSky,
+  computeTracks,
+  moonPhaseViews,
+  riseSet,
+  solarOrbits,
+} from './sky.js';
 import {
   formatAltitude,
   formatAltitudeSentence,
@@ -27,6 +37,7 @@ import {
 } from './format.js';
 
 const FACTS = [
+  ['kind', 'Type'],
   ['distance', 'Distance'],
   ['light', 'Light time'],
   ['magnitude', 'Magnitude'],
@@ -57,30 +68,38 @@ for (const [key, label] of FACTS) {
 }
 
 const rows = new Map();
-for (const meta of BODIES) {
-  const item = document.createElement('li');
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'body';
-  button.style.setProperty('--body', meta.color);
-  button.innerHTML = `
-    <span class="swatch"></span>
-    <span>
-      <span class="body-name">${meta.label}</span>
-      <span class="body-where"></span>
-      <span class="body-meta"></span>
-    </span>
-    <span class="body-mag"></span>
-  `;
-  button.addEventListener('click', () => select(meta.id, true));
-  item.append(button);
-  list.append(item);
-  rows.set(meta.id, {
-    button,
-    where: button.querySelector('.body-where'),
-    meta: button.querySelector('.body-meta'),
-    mag: button.querySelector('.body-mag'),
-  });
+for (const kind of BODY_KINDS) {
+  const members = BODIES.filter((body) => body.kind === kind.id);
+  if (!members.length) continue;
+  const header = document.createElement('li');
+  header.className = 'body-group';
+  header.textContent = kind.label;
+  list.append(header);
+  for (const meta of members) {
+    const item = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'body';
+    button.style.setProperty('--body', meta.color);
+    button.innerHTML = `
+      <span class="swatch"></span>
+      <span>
+        <span class="body-name">${meta.label}</span>
+        <span class="body-where"></span>
+        <span class="body-meta"></span>
+      </span>
+      <span class="body-mag"></span>
+    `;
+    button.addEventListener('click', () => select(meta.id, true));
+    item.append(button);
+    list.append(item);
+    rows.set(meta.id, {
+      button,
+      where: button.querySelector('.body-where'),
+      meta: button.querySelector('.body-meta'),
+      mag: button.querySelector('.body-mag'),
+    });
+  }
 }
 
 const globe = createGlobe(
@@ -114,11 +133,13 @@ let savedPlaces = readPlaces(localStorage);
 let savedMarkupKey = null;
 let storageError = false;
 let bodies = [];
+let showers = [];
 let selectedId = 'Sun';
 let riseKey = '';
 let riseInfo = { rise: null, set: null };
 let revealed = false;
 let viewed = null;
+let showerKey = '';
 
 function reveal() {
   if (revealed) return;
@@ -277,7 +298,8 @@ function select(id, fly) {
   }
   const body = current();
   if (fly && body) {
-    globe.centerOn(body.latitude, body.longitude);
+    // Keep solar-system zoom; only re-center when looking at Earth.
+    if (!globe.inSystem()) globe.centerOn(body.latitude, body.longitude);
     collapseSheet();
   }
   riseKey = '';
@@ -324,6 +346,7 @@ function renderDetail() {
     ? null
     : `${body.elongation.toFixed(1)}° · ${body.visibility} sky`;
 
+  setFact('kind', KIND_LABEL[body.kind] ?? body.kind);
   setFact('distance', formatDistance(body));
   setFact('light', formatLightTime(body.distanceKm));
   setFact('magnitude', formatMagnitude(body.magnitude));
@@ -490,10 +513,10 @@ const lede = document.getElementById('lede');
 
 function describeView() {
   if (pathsOn && skyOn) {
-    return 'Lines trace the next 24 hours. Sky labels mark where each constellation and galaxy is straight overhead.';
+    return 'Paths show where each pin is headed. Sky labels mark constellations and galaxies overhead.';
   }
   if (pathsOn) {
-    return 'Lines trace the next 24 hours. Arrows on the selected body show which way it goes.';
+    return 'Paths show where each pin is headed. Arrows on the selected body show which way it goes.';
   }
   if (skyOn) {
     return 'Labels mark where each constellation and galaxy is straight overhead. The line is where the Milky Way passes overhead.';
@@ -539,10 +562,42 @@ skyButton.addEventListener('click', () => {
 });
 
 function syncLegend() {
-  const legend = document.getElementById('legend');
-  const hours = document.getElementById('legend-hours');
-  legend.hidden = !globe.inSystem();
-  hours.hidden = !pathsOn;
+  document.getElementById('legend').hidden = !globe.inSystem();
+}
+
+function renderShowers() {
+  const root = document.getElementById('showers');
+  const list = document.getElementById('shower-list');
+  if (!showers.length) {
+    root.hidden = true;
+    list.replaceChildren();
+    showerKey = '';
+    return;
+  }
+  root.hidden = false;
+  const key = showers.map((shower) => `${shower.id}:${shower.daysFromPeak}`).join('|');
+  if (key === showerKey) return;
+  showerKey = key;
+  list.replaceChildren();
+  for (const shower of showers) {
+    const item = document.createElement('li');
+    const when = shower.nearPeak
+      ? 'Peak around now'
+      : shower.daysFromPeak === 0
+        ? 'Peak today'
+        : shower.daysFromPeak > 0
+          ? `Peak was ${shower.daysFromPeak}d ago`
+          : `Peak in ${Math.abs(shower.daysFromPeak)}d`;
+    const title = document.createElement('strong');
+    title.textContent = shower.name;
+    const kind = document.createElement('span');
+    kind.className = 'shower-kind';
+    kind.textContent = 'Meteor shower';
+    const detail = document.createElement('small');
+    detail.textContent = `${when} · radiant in ${shower.constellation} · ~${shower.zhr}/h · usual peak ${peakLabel(shower)}`;
+    item.append(title, kind, detail);
+    list.append(item);
+  }
 }
 
 function tick() {
@@ -550,10 +605,12 @@ function tick() {
   globe.setSkyTime(date);
   const sky = computeSky(date, place);
   bodies = globe.update(sky.bodies);
+  showers = sky.showers ?? [];
   refreshOrbits(date);
   if (pathsOn) refreshTracks();
   renderClocks(date);
   renderList();
+  renderShowers();
   renderDetail();
   scheduleRiseSet();
   syncLegend();
