@@ -39,7 +39,7 @@
         <ul id="search-results" hidden></ul>
       </form>
       <div class="tools">
-        <button id="paths" type="button" aria-pressed="false" title="Show the next 24 hours of each overhead point, with arrows in the direction of travel">Paths</button>
+        <button id="paths" type="button" aria-pressed="false" title="Trace where each overhead point moves, with arrows on the selected body">Paths</button>
         <button id="sky" type="button" aria-pressed="false" title="Show where constellations and galaxies are straight overhead">Sky</button>
         <button id="locate" type="button" aria-label="My location" title="My location">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -56,7 +56,7 @@
 
     <aside id="panel">
       <button id="panel-toggle" type="button" aria-expanded="false">
-        <span>Sun, Moon, and planets</span>
+        <span>Sky objects</span>
         <span class="chevron" aria-hidden="true"></span>
       </button>
       <div id="panel-body">
@@ -64,6 +64,10 @@
           Pins mark where each body is straight overhead. Zoom out to see the solar system.
         </p>
         <ul id="bodies"></ul>
+        <section id="showers" hidden>
+          <p class="showers-title">Meteor showers</p>
+          <ul id="shower-list"></ul>
+        </section>
         <section id="detail">
           <header class="detail-head">
             <h2 id="detail-name">Sun</h2>
@@ -113,10 +117,6 @@
       <li>
         <span class="legend-orbit" aria-hidden="true"></span>
         Orbit around the Sun
-      </li>
-      <li id="legend-hours">
-        <span class="legend-dash" aria-hidden="true"></span>
-        Next 24 hours
       </li>
       <li>
         <span class="legend-stars" aria-hidden="true"></span>

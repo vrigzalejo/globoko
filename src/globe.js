@@ -253,6 +253,46 @@ function makePluto() {
   });
 }
 
+function makeAsteroid(light, dark) {
+  return makePlanet((ctx, size) => {
+    const wash = ctx.createRadialGradient(34, 32, 4, 48, 48, 48);
+    wash.addColorStop(0, light);
+    wash.addColorStop(1, dark);
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(58, 54, 10, 7, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(40, 40, 5, 4, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function makeComet(core, haze) {
+  return makePlanet((ctx, size) => {
+    const wash = ctx.createRadialGradient(40, 44, 2, 48, 48, 46);
+    wash.addColorStop(0, '#ffffff');
+    wash.addColorStop(0.22, core);
+    wash.addColorStop(0.55, haze);
+    wash.addColorStop(1, 'rgba(8, 18, 32, 0)');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, size, size);
+    const tail = ctx.createLinearGradient(48, 48, 86, 18);
+    tail.addColorStop(0, haze);
+    tail.addColorStop(1, 'rgba(8, 18, 32, 0)');
+    ctx.fillStyle = tail;
+    ctx.beginPath();
+    ctx.moveTo(48, 42);
+    ctx.lineTo(88, 12);
+    ctx.lineTo(78, 28);
+    ctx.lineTo(52, 52);
+    ctx.closePath();
+    ctx.fill();
+  });
+}
+
 function makeMoon() {
   return makePlanet((ctx, size) => {
     const center = size / 2;
@@ -284,6 +324,11 @@ const PLANET_IMAGE = {
   Neptune: makeNeptune(),
   Pluto: makePluto(),
   Moon: makeMoon(),
+  Ceres: makeAsteroid('#d5dbe3', '#8a939f'),
+  Vesta: makeAsteroid('#e4d3b4', '#9a8460'),
+  Halley: makeComet('#dcecff', 'rgba(110, 170, 255, 0.55)'),
+  Encke: makeComet('#e8f7ff', 'rgba(140, 200, 230, 0.55)'),
+  '67P': makeComet('#eef3f8', 'rgba(160, 180, 200, 0.5)'),
 };
 
 const PLANET_SCALE = {
@@ -298,6 +343,11 @@ const PLANET_SCALE = {
   Neptune: 0.08,
   Pluto: 0.05,
   Moon: 0.055,
+  Ceres: 0.05,
+  Vesta: 0.048,
+  Halley: 0.07,
+  Encke: 0.06,
+  '67P': 0.055,
 };
 
 const BODY_DISTANCE_SCALE = new NearFarScalar(50_000_000_000, 1, 1_200_000_000_000, 0.62);
@@ -333,6 +383,11 @@ const LABEL_OFFSET = {
   Uranus: [24, 8],
   Neptune: [0, 24],
   Pluto: [-16, 26],
+  Ceres: [20, 22],
+  Vesta: [-24, -18],
+  Halley: [22, -20],
+  Encke: [-26, 14],
+  '67P': [18, 24],
 };
 
 function labelOptions(text, offsetX = 0, offsetY = -16) {
@@ -492,6 +547,10 @@ export function createGlobe(container, creditContainer) {
     return earthScreenPixels() < 220;
   }
 
+  function pathsOnGlobe() {
+    return pathsVisible && !systemView();
+  }
+
   function pairPresence() {
     const distance = cameraDistance();
     const pair = pairDistance();
@@ -539,6 +598,11 @@ export function createGlobe(container, creditContainer) {
     Uranus: 50,
     Neptune: 58,
     Pluto: 38,
+    Ceres: 42,
+    Vesta: 40,
+    Halley: 48,
+    Encke: 46,
+    '67P': 32,
   };
 
   function nameSlot(id) {
@@ -671,13 +735,13 @@ export function createGlobe(container, creditContainer) {
       show: false,
       polyline: {
         positions: [],
-        width: new CallbackProperty(() => (selected.id === meta.id ? 3 : 1.5), false),
+        width: new CallbackProperty(() => (selected.id === meta.id ? 2.5 : 1.25), false),
         material: new PolylineDashMaterialProperty({
           color: new CallbackProperty(
-            () => color.withAlpha(selected.id === meta.id ? 0.95 : 0.55),
+            () => color.withAlpha(selected.id === meta.id ? 0.9 : 0.4),
             false,
           ),
-          dashLength: 24,
+          dashLength: 20,
         }),
         arcType: ArcType.GEODESIC,
       },
@@ -743,9 +807,13 @@ export function createGlobe(container, creditContainer) {
       pathsVisible
       && systemFade() > 0.2
       && skyPositions.length > 2
-      && pathScreenRadius(skyPositions) > 36
     );
-    const skyHoursOn = () => skyPathOn() && selected.id === meta.id && pathScreenRadius(skyPositions) > 72;
+    // Hour marks only when the path is large enough on screen to read.
+    const skyHoursOn = () => (
+      skyPathOn()
+      && selected.id === meta.id
+      && pathScreenRadius(skyPositions) > 64
+    );
     if (meta.id !== 'Moon') {
       viewer.entities.add({
         id: `sky-path-${meta.id}`,
@@ -754,47 +822,15 @@ export function createGlobe(container, creditContainer) {
             () => (skyPositions.length > 2 ? skyPositions : skyHidden),
             false,
           ),
-          width: new CallbackProperty(() => (selected.id === meta.id ? 2 : 1.5), false),
-          material: new PolylineDashMaterialProperty({
-            color: new CallbackProperty(
-              () => color.withAlpha((selected.id === meta.id ? 0.9 : 0.55) * systemFade()),
+          width: new CallbackProperty(() => (selected.id === meta.id ? 2 : 1.25), false),
+          material: new ColorMaterialProperty(
+            new CallbackProperty(
+              () => color.withAlpha((selected.id === meta.id ? 0.85 : 0.35) * systemFade()),
               false,
             ),
-            dashLength: 28,
-          }),
+          ),
           arcType: ArcType.NONE,
           show: new CallbackProperty(skyPathOn, false),
-        },
-      });
-      const skyCaptionAt = new Cartesian3();
-      const skyCaptionOffset = new Cartesian2(0, -16);
-      viewer.entities.add({
-        id: `sky-caption-${meta.id}`,
-        position: new CallbackProperty(() => {
-          if (skyPositions.length > 1) {
-            const index = Math.round((skyPositions.length - 1) * 0.25);
-            Cartesian3.clone(skyPositions[index], skyCaptionAt);
-          }
-          return skyCaptionAt;
-        }, false),
-        label: {
-          text: `${meta.label} · next 24 hours`,
-          font: '600 11px Outfit, "Segoe UI", sans-serif',
-          fillColor: Color.WHITE,
-          outlineColor: Color.fromCssColorString('#061018'),
-          outlineWidth: 3,
-          style: LabelStyle.FILL_AND_OUTLINE,
-          horizontalOrigin: HorizontalOrigin.CENTER,
-          verticalOrigin: VerticalOrigin.CENTER,
-          pixelOffset: new CallbackProperty(
-            () => radialLabelOffset(skyCaptionAt, 16, skyCaptionOffset),
-            false,
-          ),
-          show: new CallbackProperty(
-            () => skyPathOn() && pathScreenRadius(skyPositions) > 78,
-            false,
-          ),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       });
       for (const arrow of skyArrows) {
@@ -804,10 +840,10 @@ export function createGlobe(container, creditContainer) {
           billboard: {
             image: arrowImage,
             color,
-            scale: 0.36,
+            scale: 0.32,
             rotation: new CallbackProperty(() => arrowRotation(arrow), false),
             show: new CallbackProperty(
-              () => arrow.ready && (skyHoursOn() || (skyPathOn() && selected.id !== meta.id && arrow.hour === 8)),
+              () => arrow.ready && skyHoursOn() && (arrow.hour === 4 || arrow.hour === 12 || arrow.hour === 20),
               false,
             ),
             verticalOrigin: VerticalOrigin.CENTER,
@@ -816,7 +852,7 @@ export function createGlobe(container, creditContainer) {
           },
           label: {
             text: `+${arrow.hour}h`,
-            font: '600 12px Outfit, "Segoe UI", sans-serif',
+            font: '600 11px Outfit, "Segoe UI", sans-serif',
             fillColor: Color.WHITE,
             outlineColor: Color.fromCssColorString('#061018'),
             outlineWidth: 3,
@@ -824,7 +860,10 @@ export function createGlobe(container, creditContainer) {
             horizontalOrigin: HorizontalOrigin.CENTER,
             verticalOrigin: VerticalOrigin.CENTER,
             pixelOffset: new CallbackProperty(() => skyLabelOffset(arrow), false),
-            show: new CallbackProperty(() => skyHoursOn() && arrow.ready, false),
+            show: new CallbackProperty(
+              () => arrow.ready && skyHoursOn() && (arrow.hour === 4 || arrow.hour === 12 || arrow.hour === 20),
+              false,
+            ),
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           },
         });
@@ -832,6 +871,7 @@ export function createGlobe(container, creditContainer) {
     }
 
     records.set(meta.id, {
+      id: meta.id,
       ground,
       top,
       sky,
@@ -866,6 +906,11 @@ export function createGlobe(container, creditContainer) {
   }));
   const moonPathColor = Color.fromCssColorString('#d5dde8');
   const moonPathOn = () => pathsVisible && pairPresence() > 0.2 && moonDayPath.length > 2;
+  const moonHoursOn = () => (
+    moonPathOn()
+    && selected.id === 'Moon'
+    && pathScreenRadius(moonDayPath) > 96
+  );
   viewer.entities.add({
     id: 'moon-day-path',
     polyline: {
@@ -873,39 +918,42 @@ export function createGlobe(container, creditContainer) {
         () => (moonDayPath.length > 2 ? moonDayPath : moonPathHidden),
         false,
       ),
-      width: 2,
-      material: new PolylineDashMaterialProperty({
-        color: new CallbackProperty(() => moonPathColor.withAlpha(0.9 * pairPresence()), false),
-        dashLength: 28,
-      }),
+      width: new CallbackProperty(() => (selected.id === 'Moon' ? 2 : 1.25), false),
+      material: new ColorMaterialProperty(
+        new CallbackProperty(
+          () => moonPathColor.withAlpha((selected.id === 'Moon' ? 0.85 : 0.35) * pairPresence()),
+          false,
+        ),
+      ),
       arcType: ArcType.NONE,
       show: new CallbackProperty(moonPathOn, false),
     },
   });
   for (const arrow of moonPathArrows) {
+    const moonMark = arrow.hour === 4 || arrow.hour === 12 || arrow.hour === 20;
     viewer.entities.add({
       id: `moon-day-arrow-${arrow.hour}`,
       position: new CallbackProperty(() => arrow.from, false),
       billboard: {
         image: arrowImage,
         color: moonPathColor,
-        scale: 0.36,
+        scale: 0.32,
         rotation: new CallbackProperty(() => arrowRotation(arrow), false),
-        show: new CallbackProperty(() => moonPathOn() && arrow.ready, false),
+        show: new CallbackProperty(() => moonHoursOn() && moonMark && arrow.ready, false),
         verticalOrigin: VerticalOrigin.CENTER,
         horizontalOrigin: HorizontalOrigin.CENTER,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       label: {
         text: `+${arrow.hour}h`,
-        font: '600 12px Outfit, "Segoe UI", sans-serif',
+        font: '600 11px Outfit, "Segoe UI", sans-serif',
         fillColor: Color.WHITE,
         outlineColor: Color.fromCssColorString('#061018'),
         outlineWidth: 3,
         style: LabelStyle.FILL_AND_OUTLINE,
         horizontalOrigin: HorizontalOrigin.LEFT,
         pixelOffset: new Cartesian2(12, 0),
-        show: new CallbackProperty(() => moonPathOn() && arrow.ready, false),
+        show: new CallbackProperty(() => moonHoursOn() && moonMark && arrow.ready, false),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     });
@@ -1132,6 +1180,9 @@ export function createGlobe(container, creditContainer) {
     Uranus: 0.3,
     Neptune: 0.42,
     Pluto: 0.5,
+    Halley: 0.18,
+    Encke: 0.34,
+    '67P': 0.46,
   };
   const orbitMarks = new Map();
   const orbitOffsets = new Map();
@@ -1359,15 +1410,12 @@ export function createGlobe(container, creditContainer) {
     return arrow.rotation;
   }
 
-  function pathsOnGlobe() {
-    return pathsVisible && !systemView();
-  }
-
   function applyPathVisibility(record) {
     const show = pathsOnGlobe();
     record.track.show = show;
+    const arrowsOn = show && selected.id === record.id;
     for (const arrow of record.arrows) {
-      arrow.entity.show = show && arrow.ready;
+      arrow.entity.show = arrowsOn && arrow.ready;
     }
   }
 
